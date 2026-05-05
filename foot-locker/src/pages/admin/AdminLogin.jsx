@@ -5,14 +5,14 @@ import {
   useLocation,
   useSearchParams,
 } from 'react-router-dom';
-import { getAdminDemoPassword } from '../../config/admin.js';
 import { useAdminAuth } from '../../hooks/useAdminAuth.js';
 
 export function AdminLogin() {
   const { session, login } = useAdminAuth();
   const [email, setEmail] = useState('ops@shoelocker.ke');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [params] = useSearchParams();
   const location = useLocation();
 
@@ -26,11 +26,13 @@ export function AdminLogin() {
     return <Navigate to={redirectTo} replace />;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    setError(false);
-    const ok = login(email, password);
-    if (!ok) setError(true);
+    setError('');
+    setLoading(true);
+    const result = await login(email, password);
+    setLoading(false);
+    if (!result.ok) setError(result.error || 'Sign in failed');
   }
 
   return (
@@ -52,9 +54,7 @@ export function AdminLogin() {
         >
           {error ? (
             <p className="rounded-lg bg-brand-red/20 px-3 py-2 text-sm font-medium text-red-100">
-              Incorrect password — check{' '}
-              <code className="rounded bg-black/30 px-1">VITE_ADMIN_PASSWORD</code>{' '}
-              or use the dev default below.
+              {error}
             </p>
           ) : null}
           <div>
@@ -90,14 +90,11 @@ export function AdminLogin() {
           </div>
           <button
             type="submit"
+            disabled={loading}
             className="h-12 w-full rounded-full bg-brand-red text-sm font-bold uppercase tracking-wide text-white transition hover:bg-brand-red-hover"
           >
-            Enter admin
+            {loading ? 'Signing in...' : 'Enter admin'}
           </button>
-          <p className="text-center text-xs text-neutral-500">
-            Default password:{' '}
-            <code className="text-neutral-300">{getAdminDemoPassword()}</code>
-          </p>
         </form>
 
         <p className="mt-8 text-center text-sm text-neutral-500">

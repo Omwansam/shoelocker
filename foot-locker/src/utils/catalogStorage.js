@@ -4,7 +4,6 @@
  */
 
 import { products as seedProducts } from '../data/products.js';
-import { ADMIN_CATALOG_STORAGE_KEY } from '../config/admin.js';
 
 /**
  * @typedef {{
@@ -32,26 +31,12 @@ import { ADMIN_CATALOG_STORAGE_KEY } from '../config/admin.js';
  */
 
 const EVENT = 'shoelocker-catalog-changed';
+/** @type {CatalogDelta} */
+let memoryDelta = emptyDelta();
 
 /** @returns {CatalogDelta} */
 export function readCatalogDelta() {
-  try {
-    const raw = globalThis.localStorage?.getItem(ADMIN_CATALOG_STORAGE_KEY);
-    if (!raw) return emptyDelta();
-    const o = JSON.parse(raw);
-    if (!o || typeof o !== 'object') return emptyDelta();
-    return {
-      v: 1,
-      additions: Array.isArray(o.additions) ? o.additions : [],
-      overrides:
-        o.overrides && typeof o.overrides === 'object' && !Array.isArray(o.overrides)
-          ? o.overrides
-          : {},
-      removedIds: Array.isArray(o.removedIds) ? o.removedIds : [],
-    };
-  } catch {
-    return emptyDelta();
-  }
+  return memoryDelta;
 }
 
 /** @returns {CatalogDelta} */
@@ -61,7 +46,7 @@ function emptyDelta() {
 
 /** @param {CatalogDelta} d */
 export function writeCatalogDelta(d) {
-  globalThis.localStorage?.setItem(ADMIN_CATALOG_STORAGE_KEY, JSON.stringify(d));
+  memoryDelta = d;
   globalThis.dispatchEvent(new CustomEvent(EVENT));
 }
 

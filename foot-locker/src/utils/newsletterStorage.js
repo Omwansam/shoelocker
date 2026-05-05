@@ -1,6 +1,6 @@
-import { NEWSLETTER_STORAGE_KEY } from '../config/storefrontStorageKeys.js';
-
 const CHANGE = 'shoelocker-newsletter-changed';
+/** @type {NewsletterEntry[]} */
+let memorySubscribers = [];
 
 /**
  * @typedef {{ email: string, subscribedAt: string }} NewsletterEntry
@@ -16,30 +16,12 @@ function emitChange() {
 
 /** @returns {NewsletterEntry[]} */
 export function readNewsletterSubscribers() {
-  try {
-    const raw = globalThis.localStorage?.getItem(NEWSLETTER_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (x) =>
-        x &&
-        typeof x === 'object' &&
-        typeof x.email === 'string' &&
-        typeof x.subscribedAt === 'string',
-    );
-  } catch {
-    return [];
-  }
+  return memorySubscribers;
 }
 
 /** @param {NewsletterEntry[]} rows */
 function writeNewsletterSubscribers(rows) {
-  try {
-    globalThis.localStorage?.setItem(NEWSLETTER_STORAGE_KEY, JSON.stringify(rows));
-  } catch {
-    //
-  }
+  memorySubscribers = rows;
   emitChange();
 }
 

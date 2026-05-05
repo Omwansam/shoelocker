@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emitCartAnnounce } from '../utils/cartAnnounce.js';
 import { CartContext } from './cartContext.js';
 
-const CART_STORAGE_KEY = 'shoelocker-cart-v1';
-
 /**
  * @typedef {import('../data/products.js').products extends (infer P)[] ? P : never} Product
  */
@@ -27,27 +25,6 @@ function lineKey(productId, size) {
   return `${productId}::${size}`;
 }
 
-/** @returns {CartLineItem[]} */
-function readStoredItems() {
-  try {
-    const raw = globalThis.localStorage?.getItem(CART_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-/** @param {CartLineItem[]} items */
-function writeStoredItems(items) {
-  try {
-    globalThis.localStorage?.setItem(CART_STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    /* quota / privacy mode */
-  }
-}
-
 /**
  * @typedef {{
  *   addItem: (product: Product, size: string, qty?: number, options?: { announce?: boolean }) => void,
@@ -65,18 +42,12 @@ function writeStoredItems(items) {
 
 /** @param {{ children: React.ReactNode }} props */
 export function CartProvider({ children }) {
-  const [items, setItems] = useState(
-    /** @type {CartLineItem[]} */ (() => readStoredItems()),
-  );
+  const [items, setItems] = useState(/** @type {CartLineItem[]} */ ([]));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const itemsRef = useRef(items);
 
   useEffect(() => {
     itemsRef.current = items;
-  }, [items]);
-
-  useEffect(() => {
-    writeStoredItems(items);
   }, [items]);
 
   const addItem = useCallback((product, size, qty = 1, options = {}) => {

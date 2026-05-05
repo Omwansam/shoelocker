@@ -67,7 +67,7 @@ const sections = /** @type {const} */ ([
   {
     id: 'privacy',
     title: 'Privacy',
-    body: 'We only store cart data in your browser (localStorage) in this version — no server-side PII.',
+    body: 'This app does not use browser local storage for persisted user data; account and commerce data are backend-managed.',
   },
   {
     id: 'accessibility',

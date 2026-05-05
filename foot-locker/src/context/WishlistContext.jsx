@@ -1,28 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { WISHLIST_STORAGE_KEY } from '../config/storefrontStorageKeys.js';
 import { WishlistContext } from './wishlistContext.js';
 
 const CHANGE = 'shoelocker-wishlist-changed';
+let memoryIds = [];
 
 /** @returns {string[]} */
 function readIds() {
-  try {
-    const raw = globalThis.localStorage?.getItem(WISHLIST_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
+  return memoryIds;
 }
 
 /** @param {string[]} ids */
 function writeIds(ids) {
-  try {
-    globalThis.localStorage?.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    //
-  }
+  memoryIds = ids;
   try {
     globalThis.dispatchEvent(new CustomEvent(CHANGE));
   } catch {
@@ -35,14 +24,12 @@ export function WishlistProvider({ children }) {
   const [ids, setIds] = useState(() => readIds());
 
   useEffect(() => {
-    function onStorage() {
+    function onChange() {
       setIds(readIds());
     }
-    globalThis.addEventListener('storage', onStorage);
-    globalThis.addEventListener(CHANGE, onStorage);
+    globalThis.addEventListener(CHANGE, onChange);
     return () => {
-      globalThis.removeEventListener('storage', onStorage);
-      globalThis.removeEventListener(CHANGE, onStorage);
+      globalThis.removeEventListener(CHANGE, onChange);
     };
   }, []);
 

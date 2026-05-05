@@ -1,9 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ADMIN_SESSION_STORAGE_KEY,
-  getAdminDemoPassword,
-} from '../config/admin.js';
 import { AdminAuthContext } from './adminAuthContext.js';
+import { loginRequest } from '../utils/authApi.js';
 
 /**
  * @typedef {{
@@ -14,54 +11,35 @@ import { AdminAuthContext } from './adminAuthContext.js';
 
 /** @typedef {{
  *   session: AdminSession | null,
- *   login: (email: string, password: string) => boolean,
+ *   login: (email: string, password: string) => Promise<{ ok: boolean, error?: string }>,
  *   logout: () => void,
  * }} AdminAuthValue */
 
-/** @returns {AdminSession | null} */
-function readSession() {
-  try {
-    const raw = globalThis.localStorage?.getItem(ADMIN_SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    if (
-      o &&
-      typeof o.email === 'string' &&
-      typeof o.signedInAt === 'number'
-    ) {
-      return { email: o.email, signedInAt: o.signedInAt };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/** @param {AdminSession | null} s */
-function persistSession(s) {
-  if (!globalThis.localStorage) return;
-  if (!s) globalThis.localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-  else globalThis.localStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify(s));
-}
-
 /** @param {{ children: import('react').ReactNode }} props */
 export function AdminAuthProvider({ children }) {
-  const [session, setSession] = useState(() => readSession());
+  const [session, setSession] = useState(/** @type {AdminSession | null} */ (null));
 
-  const login = useCallback((email, password) => {
-    const ok = password === getAdminDemoPassword();
-    if (!ok) return false;
-    const next = {
-      email: email.trim() || 'admin@shoelocker.ke',
-      signedInAt: Date.now(),
-    };
-    persistSession(next);
-    setSession(next);
-    return true;
+  const login = useCallback(async (email, password) => {
+    try {
+      const payload = await loginRequest(email.trim(), password);
+      const user = payload?.user;
+      const role = String(user?.role || '').toLowerCase();
+      const isAdmin = Boolean(user?.is_admin) || role === 'admin' || role === 'manager';
+      if (!isAdmin) {
+        return { ok: false, error: 'This account is not allowed in admin console.' };
+      }
+      const next = {
+        email: user?.email || email.trim() || 'admin@shoelocker.ke',
+        signedInAt: Date.now(),
+      };
+      setSession(next);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'Login failed' };
+    }
   }, []);
 
   const logout = useCallback(() => {
-    persistSession(null);
     setSession(null);
   }, []);
 

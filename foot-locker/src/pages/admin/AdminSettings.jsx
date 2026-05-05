@@ -42,13 +42,10 @@ export function AdminSettings() {
       </section>
 
       <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-neutral-950">Demo data</h2>
+        <h2 className="text-lg font-semibold text-neutral-950">Runtime data</h2>
         <p className="text-sm text-neutral-600">
-          Clears staff-side experiment state: Nairobi DC quantities, patched
-          order statuses, bespoke catalog (new SKUs/edits/images), custom
-          promo codes, plus storefront demo wishlist, checkout order history,
-          &amp; footer newsletter signups stored in this browser. Your admin
-          session stays signed in until you deliberately sign out.
+          This build does not store browser-local state. All persistent data
+          should come from backend APIs.
         </p>
         <button
           type="button"
@@ -58,20 +55,18 @@ export function AdminSettings() {
           }}
           className="rounded-full border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-50"
         >
-          Reset demo payloads &amp; reload
+          Reload admin
         </button>
       </section>
 
       <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-neutral-950">Security</h2>
         <p className="text-sm text-neutral-600">
-          Demo admin password is{' '}
+          Admin authentication is enforced by backend auth routes. Legacy label:{' '}
           <code className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-900">
             {getAdminDemoPassword()}
           </code>
-          . Override with environment variable{' '}
-          <code className="rounded bg-neutral-100 px-1.5 py-0.5">VITE_ADMIN_PASSWORD</code>{' '}
-          before deploy.
+          .
         </p>
         <p className="text-sm text-neutral-600">
           Support escalation:{' '}

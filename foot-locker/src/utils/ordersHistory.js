@@ -1,8 +1,8 @@
-/** Customer-facing order history (checkout demo) — localStorage */
-
-export const ORDER_HISTORY_STORAGE_KEY = 'shoelocker-order-history-v1';
+/** Customer-facing order history (in-memory only). */
 
 const CHANGE = 'shoelocker-order-history-changed';
+/** @type {StoredOrder[]} */
+let memoryOrders = [];
 
 /**
  * @typedef {{
@@ -37,26 +37,12 @@ function emitChange() {
 
 /** @returns {StoredOrder[]} */
 export function readOrdersHistory() {
-  try {
-    const raw = globalThis.localStorage?.getItem(ORDER_HISTORY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return memoryOrders;
 }
 
 /** @param {StoredOrder[]} orders */
 function writeOrdersHistory(orders) {
-  try {
-    globalThis.localStorage?.setItem(
-      ORDER_HISTORY_STORAGE_KEY,
-      JSON.stringify(orders),
-    );
-  } catch {
-    //
-  }
+  memoryOrders = orders;
   emitChange();
 }
 

@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ADMIN_INVENTORY_STORAGE_KEY,
-  ADMIN_ORDER_STATUS_STORAGE_KEY,
-} from '../config/admin.js';
-import {
   mergeCatalogList,
   subscribeCatalogChange,
 } from '../utils/catalogStorage.js';
@@ -16,26 +12,10 @@ function defaultStock(/** @type {string} */ productId) {
 }
 
 function readOrderPatches() {
-  try {
-    const raw = globalThis.localStorage?.getItem(ADMIN_ORDER_STATUS_STORAGE_KEY);
-    if (!raw) return /** @type {Record<string, OrderStatus>} */ ({});
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-  } catch {
-    //
-  }
   return {};
 }
 
 function readInventoryMap() {
-  try {
-    const raw = globalThis.localStorage?.getItem(ADMIN_INVENTORY_STORAGE_KEY);
-    if (!raw) return /** @type {Record<string, number>} */ ({});
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-  } catch {
-    //
-  }
   return {};
 }
 
@@ -53,10 +33,6 @@ export function AdminOpsProvider({ children }) {
   const setOrderStatus = useCallback((orderId, status) => {
     setOrderPatches((prev) => {
       const next = { ...prev, [orderId]: status };
-      globalThis.localStorage?.setItem(
-        ADMIN_ORDER_STATUS_STORAGE_KEY,
-        JSON.stringify(next),
-      );
       return next;
     });
   }, []);
@@ -71,10 +47,6 @@ export function AdminOpsProvider({ children }) {
     const n = Math.max(0, Math.floor(Number(qty) || 0));
     setInventoryMap((prev) => {
       const next = { ...prev, [productId]: n };
-      globalThis.localStorage?.setItem(
-        ADMIN_INVENTORY_STORAGE_KEY,
-        JSON.stringify(next),
-      );
       return next;
     });
   }, []);
