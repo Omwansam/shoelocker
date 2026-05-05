@@ -38,3 +38,6 @@ dist/
 *.log
 pip-log.txt
 
+# Seed scripts (run once)
+server/seed_admin.py
+
