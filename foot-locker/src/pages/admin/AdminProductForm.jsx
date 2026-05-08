@@ -1,143 +1,125 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { products as seedProducts } from '../../data/products.js';
-import {
-  getHiddenProductRows,
-  mergeCatalogList,
-  mutateCatalog,
-  normalizeProductPayload,
-  readCatalogDelta,
-  seedProductIdSet,
-  suggestProductId,
-} from '../../utils/catalogStorage.js';
-
-/** @typedef {import('../../utils/catalogStorage.js').Product} Product */
+import { suggestProductId } from '../../utils/catalogStorage.js';
+import { useAdminProductAPI } from '../../hooks/useAdminProductAPI.js';
 
 /** @typedef {{ name: string, brand: string, category: 'men' | 'women' | 'kids', price: string, isNew: boolean, description: string, image: string, hoverImage: string, galleryText: string, sizesText: string, idSlug: string }} Draft */
-
-/** @param {string} id */
-function findDraftProduct(id) {
-  const v = mergeCatalogList().find((x) => x.id === id);
-  if (v) return v;
-  return getHiddenProductRows().find((x) => x.id === id) ?? null;
-}
-
-/** @param {import('../../utils/catalogStorage.js').CatalogDelta} d */
-function reservedSkuIds(d) {
-  const ids = new Set(seedProducts.map((p) => p.id));
-  d.additions.forEach((p) => ids.add(p.id));
-  return ids;
-}
 
 /** @param {{ variant?: 'create' }} props */
 export function AdminProductForm({ variant } = {}) {
   const navigate = useNavigate();
   const { productId } = useParams();
   const isCreate = variant === 'create';
-
+  
   const editId = !isCreate && productId ? productId : '';
 
-  const [draft, setDraft] = useState(() => {
-    if (isCreate) return emptyDraft();
-    if (!editId) return emptyDraft();
-    const prod = findDraftProduct(editId);
-    return prod ? productToDraft(prod) : emptyDraft();
-  });
+  const { createProduct, updateProduct, fetchProductById } = useAdminProductAPI();
+
+  const [draft, setDraft] = useState(() => emptyDraft());
+  const [heroFile, setHeroFile] = useState(null);
+  const [hoverFile, setHoverFile] = useState(null);
+  const [galleryFiles, setGalleryFiles] = useState([]);
+  
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(!isCreate);
 
-  const seeds = useMemo(() => seedProductIdSet(), []);
+  useEffect(() => {
+    if (!isCreate && editId) {
+      setLoadingInitial(true);
+      fetchProductById(editId)
+        .then(prod => {
+          if (prod) {
+            setDraft(productToDraft(prod));
+          } else {
+            setErr('Product not found');
+          }
+        })
+        .catch(e => setErr('Failed to load product'))
+        .finally(() => setLoadingInitial(false));
+    } else {
+      setDraft(emptyDraft());
+      setLoadingInitial(false);
+    }
+  }, [isCreate, editId, fetchProductById]);
 
   function handleSuggestSlug() {
     setDraft((d) => ({ ...d, idSlug: suggestProductId(d.name || 'style') }));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setErr('');
     setBusy(true);
     try {
-      const galleryArr = parseGallery(draft.galleryText);
-      const mainImage = draft.image.trim() || galleryArr[0] || '';
-      const hover = draft.hoverImage.trim() || galleryArr[1] || mainImage;
       const newId =
         isCreate ?
           (draft.idSlug.trim() || suggestProductId(draft.name || 'style'))
         : editId;
 
-      if (isCreate) {
-        const delta = readCatalogDelta();
-        const taken = reservedSkuIds(delta);
-        if (taken.has(newId)) {
-          setErr('That SKU is already taken — pick another slug.');
-          setBusy(false);
-          return;
+      const catMap = { men: 1, women: 2, kids: 3 };
+      const categoryId = catMap[draft.category] || 1;
+
+      const formData = new FormData();
+      formData.append('product_slug', newId);
+      formData.append('product_name', draft.name);
+      formData.append('brand', draft.brand);
+      formData.append('storefront_category', draft.category);
+      formData.append('product_price', draft.price);
+      formData.append('is_new', draft.isNew.toString());
+      formData.append('product_description', draft.description);
+      formData.append('category_id', categoryId.toString());
+      formData.append('sizes', JSON.stringify(parseSizes(draft.sizesText)));
+
+      if (heroFile) {
+        formData.append('image', heroFile);
+      } else if (draft.image) {
+        formData.append('image', draft.image);
+      }
+
+      if (hoverFile) {
+        formData.append('hover_image', hoverFile);
+      } else if (draft.hoverImage) {
+        formData.append('hover_image', draft.hoverImage);
+      }
+
+      if (galleryFiles.length > 0) {
+        galleryFiles.forEach(f => formData.append('gallery', f));
+      } else {
+        const galleryArr = parseGallery(draft.galleryText);
+        if (galleryArr.length > 0) {
+          formData.append('gallery', JSON.stringify(galleryArr));
         }
       }
 
-      const raw = {
-        id: newId,
-        name: draft.name,
-        brand: draft.brand,
-        category: draft.category,
-        price: Number(draft.price),
-        isNew: draft.isNew,
-        description: draft.description,
-        image: mainImage,
-        hoverImage: hover,
-        gallery:
-          galleryArr.length > 0 ? galleryArr : mainImage ? [mainImage] : [],
-        sizes: parseSizes(draft.sizesText),
-      };
-
-      const normalized = normalizeProductPayload(
-        /** @type {Product} */ (raw),
-      );
-
       if (isCreate) {
-        mutateCatalog((d) => {
-          d.additions.push(normalized);
-        });
-      } else if (!editId) {
-        throw new Error('Missing product');
-      } else if (seeds.has(editId)) {
-        mutateCatalog((d) => {
-          d.overrides[editId] = {
-            name: normalized.name,
-            brand: normalized.brand,
-            price: normalized.price,
-            category: normalized.category,
-            isNew: normalized.isNew,
-            description: normalized.description,
-            image: normalized.image,
-            hoverImage: normalized.hoverImage,
-            gallery: normalized.gallery,
-            sizes: normalized.sizes,
-          };
-        });
+        await createProduct(formData);
       } else {
-        mutateCatalog((d) => {
-          const i = d.additions.findIndex((p) => p.id === editId);
-          if (i === -1) throw new Error('Custom SKU not found in queue');
-          d.additions[i] = normalized;
-        });
+        await updateProduct(editId, formData);
       }
 
       navigate('/admin/products');
     } catch (er) {
+      console.error(er);
       setErr(er instanceof Error ? er.message : 'Could not save product');
     } finally {
       setBusy(false);
     }
   }
 
-  if (!isCreate) {
-    if (!editId || !findDraftProduct(editId)) {
-      return <Navigate to="/admin/products" replace />;
-    }
+  if (!isCreate && !editId) {
+    return <Navigate to="/admin/products" replace />;
   }
 
   const pageTitle = isCreate ? 'Add product' : `Edit ${editId}`;
+
+  if (loadingInitial) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6 pb-16 pt-8 text-center animate-fade-rise">
+        <p className="text-neutral-500">Loading product...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-16 animate-fade-rise">
@@ -150,8 +132,7 @@ export function AdminProductForm({ variant } = {}) {
         </Link>
         <h1 className="mt-3 text-2xl font-bold text-neutral-950">{pageTitle}</h1>
         <p className="mt-1 text-sm text-neutral-600">
-          Use HTTPS URLs for photos (CDN, Unsplash, your brand DAM). Upload-to-host
-          is not included in this prototype.
+          Upload product images to store them securely.
         </p>
       </div>
 
@@ -293,54 +274,56 @@ export function AdminProductForm({ variant } = {}) {
 
         <fieldset className="space-y-4">
           <legend className="text-sm font-bold uppercase tracking-wide text-neutral-500">
-            Images (HTTPS URLs)
+            Images
           </legend>
           <div>
             <label className="text-xs font-semibold uppercase text-neutral-500">
-              Hero image URL
+              Hero image
             </label>
             <input
-              value={draft.image}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, image: e.target.value }))
-              }
-              placeholder="https://images.unsplash.com/..."
+              type="file"
+              accept="image/*"
+              onChange={(e) => setHeroFile(e.target.files?.[0] || null)}
               className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-red/25"
             />
+            {draft.image && !heroFile && (
+                <p className="mt-1 text-xs text-neutral-500">Current: {draft.image}</p>
+            )}
           </div>
           <div>
             <label className="text-xs font-semibold uppercase text-neutral-500">
-              Hover swap URL{' '}
-              <span className="font-normal text-neutral-400">(optional)</span>
+              Hover swap URL <span className="font-normal text-neutral-400">(optional)</span>
             </label>
             <input
-              value={draft.hoverImage}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, hoverImage: e.target.value }))
-              }
-              placeholder="https://..."
+              type="file"
+              accept="image/*"
+              onChange={(e) => setHoverFile(e.target.files?.[0] || null)}
               className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-red/25"
             />
+            {draft.hoverImage && !hoverFile && (
+                <p className="mt-1 text-xs text-neutral-500">Current: {draft.hoverImage}</p>
+            )}
           </div>
           <div>
             <label className="text-xs font-semibold uppercase text-neutral-500">
-              Gallery — one URL per line
+              Gallery (up to 4 images)
             </label>
-            <textarea
-              rows={5}
-              value={draft.galleryText}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, galleryText: e.target.value }))
-              }
-              placeholder={'https://example.com/front.jpg\nhttps://example.com/detail.jpg'}
-              className="mt-2 w-full resize-y rounded-xl border border-neutral-200 px-3 py-2 font-mono text-xs outline-none focus:ring-2 focus:ring-brand-red/25"
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={(e) => setGalleryFiles(Array.from(e.target.files || []).slice(0, 4))}
+              className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-red/25"
             />
+            {draft.galleryText && galleryFiles.length === 0 && (
+                <p className="mt-1 text-xs text-neutral-500">Current gallery items exist.</p>
+            )}
           </div>
-          {draft.image || parseGallery(draft.galleryText)[0] ? (
+          {(heroFile || draft.image || galleryFiles.length > 0 || parseGallery(draft.galleryText)[0]) ? (
             <div className="overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100">
               <img
                 alt="Preview"
-                src={draft.image.trim() || parseGallery(draft.galleryText)[0]}
+                src={heroFile ? URL.createObjectURL(heroFile) : draft.image.trim() || parseGallery(draft.galleryText)[0]}
                 className="mx-auto max-h-64 object-contain"
               />
             </div>
@@ -381,13 +364,6 @@ export function AdminProductForm({ variant } = {}) {
             Cancel
           </Link>
         </div>
-
-        {!isCreate && seeds.has(editId) ? (
-          <p className="text-xs text-neutral-500">
-            Seeded pairs can be tweaked here; resetting demo data restores the bundled
-            launch catalog snapshot.
-          </p>
-        ) : null}
       </form>
     </div>
   );
@@ -409,20 +385,19 @@ function emptyDraft() {
   });
 }
 
-/** @param {Product} p */
 function productToDraft(p) {
   return {
-    name: p.name,
-    brand: p.brand,
-    category: p.category,
-    price: String(p.price),
-    isNew: p.isNew,
-    description: p.description,
-    image: p.image,
-    hoverImage: p.hoverImage,
+    name: p.name || '',
+    brand: p.brand || '',
+    category: p.category || 'men',
+    price: String(p.price || ''),
+    isNew: !!p.isNew,
+    description: p.description || '',
+    image: p.image || '',
+    hoverImage: p.hoverImage || '',
     galleryText: (p.gallery ?? []).join('\n'),
-    sizesText: p.sizes.join('\n'),
-    idSlug: p.id,
+    sizesText: (p.sizes ?? []).join('\n'),
+    idSlug: p.id || '',
   };
 }
 

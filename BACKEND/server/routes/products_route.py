@@ -3,6 +3,7 @@ from utils.images import save_product_image, delete_image_file
 from models import Product, ProductImage, OrderItem, Review, Category
 from flask_jwt_extended import jwt_required
 import os
+import json
 from sqlalchemy import func, desc
 from datetime import datetime
 
@@ -40,9 +41,17 @@ def get_best_sellers():
             
             product_data = {
                 'product_id': product.product_id,
+                'product_slug': product.product_slug,
                 'product_name': product.product_name,
+                'brand': product.brand,
+                'storefront_category': product.storefront_category,
+                'is_new': product.is_new,
+                'sizes': product.sizes or [],
                 'product_description': product.product_description,
-                'product_price': product.product_price,
+                'product_price': float(product.product_price),
+                'image': product.image,
+                'hover_image': product.hover_image,
+                'gallery': product.gallery or [],
                 'stock_quantity': product.stock_quantity,
                 'category_id': product.category_id,
                 'order_count': order_count or 0,
@@ -81,9 +90,17 @@ def get_recent_products():
             
             product_data = {
                 'product_id': product.product_id,
+                'product_slug': product.product_slug,
                 'product_name': product.product_name,
+                'brand': product.brand,
+                'storefront_category': product.storefront_category,
+                'is_new': product.is_new,
+                'sizes': product.sizes or [],
                 'product_description': product.product_description,
-                'product_price': product.product_price,
+                'product_price': float(product.product_price),
+                'image': product.image,
+                'hover_image': product.hover_image,
+                'gallery': product.gallery or [],
                 'stock_quantity': product.stock_quantity,
                 'category_id': product.category_id,
                 'created_at': product.created_at.isoformat() if product.created_at else None,
@@ -121,9 +138,21 @@ def get_recent_products_alt():
             
             product_data = {
                 'product_id': product.product_id,
+                'product_slug': product.product_slug,
                 'product_name': product.product_name,
+                'brand': product.brand,
+                'storefront_category': product.storefront_category,
+                'is_new': product.is_new,
+                'sizes': product.sizes or [],
                 'product_description': product.product_description,
-                'product_price': product.product_price,
+                'product_price': float(product.product_price),
+
+                'image': product.image,
+
+                'hover_image': product.hover_image,
+
+                'gallery': product.gallery or [],
+
                 'stock_quantity': product.stock_quantity,
                 'category_id': product.category_id,
                 'created_at': product.created_at.isoformat() if product.created_at else None,
@@ -155,14 +184,72 @@ def create_product():
     data = request.form
     files = request.files.getlist('images')
     
+    sizes = []
+    if data.get('sizes'):
+        try:
+            sizes = json.loads(data.get('sizes'))
+        except:
+            pass
+            
+    gallery = []
+    if data.get('gallery'):
+        try:
+            gallery = json.loads(data.get('gallery'))
+        except:
+            pass
+            
+    is_new = str(data.get('is_new', '')).lower() in ['true', '1', 't', 'y', 'yes']
+    product_slug = data.get('product_slug')
+    if not product_slug and data.get('product_name'):
+        product_slug = data.get('product_name').lower().replace(' ', '-')
+    
     new_product = Product(
+        product_slug=product_slug,
         product_name=data.get('product_name'),
+        brand=data.get('brand'),
+        storefront_category=data.get('storefront_category'),
+        is_new=is_new,
+        sizes=sizes,
         product_description=data.get('product_description'),
         product_price=float(data.get('product_price', 0)),  # Convert to float
         stock_quantity=int(data.get('stock_quantity', 0)),  # Convert to int
         category_id=int(data.get('category_id', 0))
     )
     db.session.add(new_product)
+    db.session.flush() # Get product_id before saving images
+    
+    # Hero image
+    hero_img = request.files.get('image')
+    if hero_img and hero_img.filename:
+        path = save_product_image(hero_img, new_product.product_id)
+        if path:
+            new_product.image = path
+    elif data.get('image'):
+        new_product.image = data.get('image')
+        
+    # Hover image
+    hover_img = request.files.get('hover_image')
+    if hover_img and hover_img.filename:
+        path = save_product_image(hover_img, new_product.product_id)
+        if path:
+            new_product.hover_image = path
+    elif data.get('hover_image'):
+        new_product.hover_image = data.get('hover_image')
+        
+    # Gallery images
+    gallery_files = request.files.getlist('gallery')
+    gallery_paths = []
+    for g_img in gallery_files[:4]:
+        if g_img and g_img.filename:
+            path = save_product_image(g_img, new_product.product_id)
+            if path:
+                gallery_paths.append(path)
+                
+    if gallery_paths:
+        new_product.gallery = gallery_paths
+    elif gallery:
+        new_product.gallery = gallery
+        
     db.session.commit()
     
     # Process images
@@ -277,9 +364,17 @@ def get_products():
             
             product_data = {
                 'product_id': product.product_id,
+                'product_slug': product.product_slug,
                 'product_name': product.product_name,
+                'brand': product.brand,
+                'storefront_category': product.storefront_category,
+                'is_new': product.is_new,
+                'sizes': product.sizes or [],
                 'product_description': product.product_description,
                 'product_price': float(product.product_price),
+                'image': product.image,
+                'hover_image': product.hover_image,
+                'gallery': product.gallery or [],
                 'stock_quantity': product.stock_quantity,
                 'category_id': product.category_id,
                 'category_name': category_name,
@@ -366,9 +461,21 @@ def get_related_products_simple(product_id):
             
             product_data = {
                 'product_id': product.product_id,
+                'product_slug': product.product_slug,
                 'product_name': product.product_name,
+                'brand': product.brand,
+                'storefront_category': product.storefront_category,
+                'is_new': product.is_new,
+                'sizes': product.sizes or [],
                 'product_description': product.product_description,
                 'product_price': float(product.product_price),
+
+                'image': product.image,
+
+                'hover_image': product.hover_image,
+
+                'gallery': product.gallery or [],
+
                 'stock_quantity': product.stock_quantity,
                 'category_id': product.category_id,
                 'category_name': category_name,
@@ -450,9 +557,21 @@ def get_related_products(product_id):
             
             product_data = {
                 'product_id': product.product_id,
+                'product_slug': product.product_slug,
                 'product_name': product.product_name,
+                'brand': product.brand,
+                'storefront_category': product.storefront_category,
+                'is_new': product.is_new,
+                'sizes': product.sizes or [],
                 'product_description': product.product_description,
                 'product_price': float(product.product_price),
+
+                'image': product.image,
+
+                'hover_image': product.hover_image,
+
+                'gallery': product.gallery or [],
+
                 'stock_quantity': product.stock_quantity,
                 'category_id': product.category_id,
                 'category_name': category_name,
@@ -495,7 +614,14 @@ def get_product(product_id):
         'product_id': product.product_id,
         'product_name': product.product_name,
         'product_description': product.product_description,
-        'product_price': product.product_price,
+        'product_price': float(product.product_price),
+
+        'image': product.image,
+
+        'hover_image': product.hover_image,
+
+        'gallery': product.gallery or [],
+
         'stock_quantity': product.stock_quantity,
         'category_id': product.category_id,
         'images': [
@@ -550,9 +676,21 @@ def get_products_by_category(category_slug):
             
             product_data = {
                 'product_id': product.product_id,
+                'product_slug': product.product_slug,
                 'product_name': product.product_name,
+                'brand': product.brand,
+                'storefront_category': product.storefront_category,
+                'is_new': product.is_new,
+                'sizes': product.sizes or [],
                 'product_description': product.product_description,
                 'product_price': float(product.product_price),
+
+                'image': product.image,
+
+                'hover_image': product.hover_image,
+
+                'gallery': product.gallery or [],
+
                 'stock_quantity': product.stock_quantity,
                 'category_id': product.category_id,
                 'category_name': category.category_name,
@@ -596,12 +734,75 @@ def update_product(product_id):
         data = request.form
         files = request.files.getlist('images')
         
-        # Update product details
-        product.product_name = data.get('product_name', product.product_name)
-        product.product_description = data.get('product_description', product.product_description)
-        product.product_price = float(data.get('product_price', product.product_price))
-        product.stock_quantity = int(data.get('stock_quantity', product.stock_quantity))
-        product.category_id = int(data.get('category_id', product.category_id))
+        # Helper to apply updates
+        def apply_updates(source_data):
+            if 'product_slug' in source_data:
+                product.product_slug = source_data.get('product_slug')
+            if 'product_name' in source_data:
+                product.product_name = source_data.get('product_name')
+            if 'brand' in source_data:
+                product.brand = source_data.get('brand')
+            if 'storefront_category' in source_data:
+                product.storefront_category = source_data.get('storefront_category')
+            if 'is_new' in source_data:
+                val = source_data.get('is_new')
+                product.is_new = str(val).lower() in ['true', '1', 't', 'y', 'yes'] if not isinstance(val, bool) else val
+            if 'sizes' in source_data:
+                sizes_val = source_data.get('sizes')
+                if isinstance(sizes_val, str):
+                    try:
+                        product.sizes = json.loads(sizes_val)
+                    except:
+                        pass
+                else:
+                    product.sizes = sizes_val
+            if 'product_description' in source_data:
+                product.product_description = source_data.get('product_description')
+            if 'product_price' in source_data:
+                product.product_price = float(source_data.get('product_price', product.product_price))
+            if 'stock_quantity' in source_data:
+                product.stock_quantity = int(source_data.get('stock_quantity', product.stock_quantity))
+            if 'category_id' in source_data:
+                product.category_id = int(source_data.get('category_id', product.category_id))
+
+        apply_updates(data)
+        
+        # Handle file uploads
+        hero_img = request.files.get('image')
+        if hero_img and hero_img.filename:
+            path = save_product_image(hero_img, product.product_id)
+            if path:
+                product.image = path
+        elif 'image' in data:
+            product.image = data.get('image')
+
+        hover_img = request.files.get('hover_image')
+        if hover_img and hover_img.filename:
+            path = save_product_image(hover_img, product.product_id)
+            if path:
+                product.hover_image = path
+        elif 'hover_image' in data:
+            product.hover_image = data.get('hover_image')
+
+        gallery_files = request.files.getlist('gallery')
+        if gallery_files and any(g.filename for g in gallery_files):
+            gallery_paths = []
+            for g_img in gallery_files[:4]:
+                if g_img and g_img.filename:
+                    path = save_product_image(g_img, product.product_id)
+                    if path:
+                        gallery_paths.append(path)
+            if gallery_paths:
+                product.gallery = gallery_paths
+        elif 'gallery' in data:
+            gallery_val = data.get('gallery')
+            if isinstance(gallery_val, str):
+                try:
+                    product.gallery = json.loads(gallery_val)
+                except:
+                    pass
+            else:
+                product.gallery = gallery_val
         
         # Process new images if any
         if files:
@@ -621,11 +822,32 @@ def update_product(product_id):
                     db.session.add(new_image)
     else:
         data = request.get_json()
-        product.product_name = data.get('product_name', product.product_name)
-        product.product_description = data.get('product_description', product.product_description)
-        product.product_price = data.get('product_price', product.product_price)
-        product.stock_quantity = data.get('stock_quantity', product.stock_quantity)
-        product.category_id = data.get('category_id', product.category_id)
+        if 'product_slug' in data:
+            product.product_slug = data.get('product_slug')
+        if 'product_name' in data:
+            product.product_name = data.get('product_name')
+        if 'brand' in data:
+            product.brand = data.get('brand')
+        if 'storefront_category' in data:
+            product.storefront_category = data.get('storefront_category')
+        if 'is_new' in data:
+            product.is_new = bool(data.get('is_new'))
+        if 'sizes' in data:
+            product.sizes = data.get('sizes')
+        if 'image' in data:
+            product.image = data.get('image')
+        if 'hover_image' in data:
+            product.hover_image = data.get('hover_image')
+        if 'gallery' in data:
+            product.gallery = data.get('gallery')
+        if 'product_description' in data:
+            product.product_description = data.get('product_description')
+        if 'product_price' in data:
+            product.product_price = float(data.get('product_price', product.product_price))
+        if 'stock_quantity' in data:
+            product.stock_quantity = int(data.get('stock_quantity', product.stock_quantity))
+        if 'category_id' in data:
+            product.category_id = int(data.get('category_id', product.category_id))
     
     db.session.commit()
     return jsonify({'message': 'Product updated successfully'}), 200

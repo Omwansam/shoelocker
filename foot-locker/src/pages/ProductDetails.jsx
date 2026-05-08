@@ -1,12 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ProductCard } from '../components/ProductCard.jsx';
 import { ProductGridSkeleton } from '../components/ProductGridSkeleton.jsx';
 import { ProductReviews } from '../components/ProductReviews.jsx';
-import { mergeCatalogList } from '../utils/catalogStorage.js';
 import { useCart } from '../hooks/useCart.js';
-import { useProducts } from '../hooks/useProducts.js';
 import { useToast } from '../hooks/useToast.js';
 import { useWishlist } from '../hooks/useWishlist.js';
 import { FREE_SHIPPING_PDP_KES } from '../config/market.js';
@@ -155,23 +153,39 @@ function ProductPurchase({ product }) {
 export function ProductDetails() {
   const { productId } = useParams();
   const navigate = useNavigate();
-  const { products, loading } = useProducts({ delayMs: 200 });
+  const [product, setProduct] = useState(null);
+  const [related, setRelated] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const catalog = products.length ? products : mergeCatalogList();
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setProduct(null);
+    setRelated([]);
 
-  const product = useMemo(
-    () => catalog.find((p) => p.id === productId) ?? null,
-    [catalog, productId],
-  );
+    async function load() {
+      try {
+        const { fetchProductById, fetchRelatedProducts } = await import('../utils/api.js');
+        const prod = await fetchProductById(productId);
+        if (!mounted) return;
+        setProduct(prod || null);
 
-  const related = useMemo(() => {
-    if (!product) return [];
-    return catalog
-      .filter(
-        (p) => p.id !== product.id && p.category === product.category,
-      )
-      .slice(0, 4);
-  }, [catalog, product]);
+        if (prod) {
+          const relatedItems = await fetchRelatedProducts(prod.product_id || productId);
+          if (mounted) setRelated(relatedItems.slice(0, 4));
+        }
+      } catch (err) {
+        console.error('Failed to load product details:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    load();
+
+    return () => {
+      mounted = false;
+    };
+  }, [productId]);
 
   if (!product && loading) {
     return (
