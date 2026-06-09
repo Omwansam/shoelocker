@@ -1,0 +1,16 @@
+__pycache__
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+.git
+.gitignore
+.vscode
+.idea
+*.md
+Pipfile
+Pipfile.lock
+.venv
+venv

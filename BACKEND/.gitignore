@@ -1,7 +1,9 @@
-# Environment and secrets
+# Environment and secrets (never commit)
 .env
 .env.*
-!.env.example
+.env.local
+.env.production
+.env.development
 
 # Python cache and compiled files
 __pycache__/
@@ -38,6 +40,13 @@ dist/
 *.log
 pip-log.txt
 
-# Seed scripts (run once)
-server/seed_admin.py
+# Credentials and keys
+*.pem
+*.key
+*.crt
+credentials/
+secrets/
 
+# Uploaded media (local dev)
+server/static/uploads/*
+!server/static/uploads/.gitkeep

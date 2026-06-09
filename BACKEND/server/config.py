@@ -59,5 +59,15 @@ class Config:
     # Backward-compatible alias (some utils referenced MPESA_STK_PUSH_URL)
     MPESA_STK_PUSH_URL = DARAJA_STK_PUSH_URL
 
+    # CORS (comma-separated origins for production deployments)
+    CORS_ORIGINS = [
+        origin.strip()
+        for origin in os.getenv(
+            'CORS_ORIGINS',
+            'http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173',
+        ).split(',')
+        if origin.strip()
+    ]
+
     # Ensure upload folder exists
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True) 
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
