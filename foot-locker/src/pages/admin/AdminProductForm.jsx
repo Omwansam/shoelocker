@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { suggestProductId } from '../../utils/catalogStorage.js';
 import { useAdminProductAPI } from '../../hooks/useAdminProductAPI.js';
 
-/** @typedef {{ name: string, brand: string, category: 'men' | 'women' | 'kids', price: string, isNew: boolean, description: string, image: string, hoverImage: string, galleryText: string, sizesText: string, idSlug: string }} Draft */
+/** @typedef {{ name: string, brand: string, category: 'men' | 'women' | 'kids', productType: 'shoes' | 'apparel' | 'accessories', price: string, isNew: boolean, description: string, image: string, hoverImage: string, galleryText: string, sizesText: string, idSlug: string }} Draft */
 
 /** @param {{ variant?: 'create' }} props */
 export function AdminProductForm({ variant } = {}) {
@@ -65,6 +65,7 @@ export function AdminProductForm({ variant } = {}) {
       formData.append('product_name', draft.name);
       formData.append('brand', draft.brand);
       formData.append('storefront_category', draft.category);
+      formData.append('product_type', draft.productType);
       formData.append('product_price', draft.price);
       formData.append('is_new', draft.isNew.toString());
       formData.append('product_description', draft.description);
@@ -210,7 +211,7 @@ export function AdminProductForm({ variant } = {}) {
             </div>
             <div>
               <label className="text-xs font-semibold uppercase text-neutral-500">
-                Category
+                Gender
               </label>
               <select
                 value={draft.category}
@@ -225,6 +226,29 @@ export function AdminProductForm({ variant } = {}) {
                 <option value="men">Men</option>
                 <option value="women">Women</option>
                 <option value="kids">Kids</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase text-neutral-500">
+                Product type
+              </label>
+              <select
+                value={draft.productType}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    productType: /** @type {Draft['productType']} */ (e.target.value),
+                    sizesText:
+                      e.target.value === 'apparel'
+                        ? 'S\nM\nL\nXL'
+                        : d.sizesText,
+                  }))
+                }
+                className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-red/25"
+              >
+                <option value="shoes">Shoes</option>
+                <option value="apparel">Apparel</option>
+                <option value="accessories">Accessories</option>
               </select>
             </div>
             <div>
@@ -335,8 +359,9 @@ export function AdminProductForm({ variant } = {}) {
             Sizes offered
           </legend>
           <p className="mt-2 text-[11px] text-neutral-500">
-            Separate with commas or new lines — show the numbering your Kenya wall
-            uses.
+            {draft.productType === 'apparel'
+              ? 'Apparel sizes — S, M, L, XL, XXL (one per line or comma-separated).'
+              : 'Separate with commas or new lines — show the numbering your Kenya wall uses.'}
           </p>
           <textarea
             required
@@ -374,6 +399,7 @@ function emptyDraft() {
     name: '',
     brand: '',
     category: 'men',
+    productType: 'shoes',
     price: '18999',
     isNew: true,
     description: '',
@@ -390,6 +416,7 @@ function productToDraft(p) {
     name: p.name || '',
     brand: p.brand || '',
     category: p.category || 'men',
+    productType: p.productType || 'shoes',
     price: String(p.price || ''),
     isNew: !!p.isNew,
     description: p.description || '',

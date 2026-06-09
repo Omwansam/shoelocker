@@ -61,6 +61,9 @@ const footCol = /** @type {const} */ ([
       ["Men's shoes", '/shop?category=men'],
       ["Women's shoes", '/shop?category=women'],
       ["Kids' shoes", '/shop?category=kids'],
+      ['Apparel', '/apparel'],
+      ['Hoodies', '/apparel?style=hoodies'],
+      ['Sale apparel', '/apparel'],
     ],
   },
   {

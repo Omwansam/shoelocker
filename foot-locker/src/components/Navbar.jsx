@@ -9,7 +9,7 @@ import { MegaPanel } from './MegaNav.jsx';
 
 /** Primary site chrome — mega nav, utility strip, quick links */
 
-/** @typedef {'men'|'women'|'kids'|'brands'|'newtrend'|null} MegaActive */
+/** @typedef {'men'|'women'|'kids'|'apparel'|'brands'|'newtrend'|null} MegaActive */
 
 export function Navbar() {
   const { itemCount, openDrawer, drawerOpen } = useCart();
@@ -143,6 +143,13 @@ export function Navbar() {
                 {item.label}
               </button>
             ))}
+
+            <Link
+              to="/apparel"
+              className="flex items-center border-b-[3px] border-transparent px-4 py-6 text-[13px] font-bold uppercase tracking-tight text-neutral-800 [font-stretch:condensed] transition hover:border-brand-red hover:bg-neutral-50"
+            >
+              Apparel
+            </Link>
 
             <Link
               to="/sale"
@@ -333,6 +340,7 @@ export function Navbar() {
               ["Men's", '/shop?category=men'],
               ["Women's", '/shop?category=women'],
               ["Kids'", '/shop?category=kids'],
+              ['Apparel', '/apparel'],
               ['Stores', '/stores'],
               ['New arrivals', '/releases'],
               ['Releases', '/releases'],
@@ -377,6 +385,13 @@ export function Navbar() {
               onClick={() => setMobileOpen(false)}
             >
               Kids&apos;
+            </Link>
+            <Link
+              to="/apparel"
+              className="block rounded-lg px-3 py-3 font-bold uppercase"
+              onClick={() => setMobileOpen(false)}
+            >
+              Apparel
             </Link>
             <Link
               to="/sale"

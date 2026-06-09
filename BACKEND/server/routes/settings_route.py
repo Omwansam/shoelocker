@@ -10,13 +10,43 @@ settings_bp = Blueprint('settings', __name__)
 def admin_required(f):
     """Decorator to check if user is admin"""
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        identity = get_jwt_identity()
+        user_id = identity.get('id') if isinstance(identity, dict) else identity
+        user = User.query.get(user_id)
         if not user or not user.is_admin:
             return jsonify({'error': 'Admin access required'}), 403
         return f(*args, **kwargs)
     decorated_function.__name__ = f.__name__
     return decorated_function
+
+
+DEFAULT_SETTINGS = [
+    ('regional', 'country', 'Kenya', 'string', 'Primary market country'),
+    ('regional', 'currency', 'KES', 'string', 'Settlement currency'),
+    ('regional', 'locale', 'en-KE', 'string', 'Store locale'),
+    ('store', 'free_shipping_threshold', '12000', 'integer', 'Free shipping minimum order (KES)'),
+    ('store', 'support_email', 'hello@shoelocker.ke', 'string', 'Customer support email'),
+    ('notifications', 'order_confirmation_email', 'true', 'boolean', 'Send order confirmation emails'),
+    ('payments', 'mpesa_enabled', 'true', 'boolean', 'Enable M-Pesa payments'),
+    ('payments', 'cod_enabled', 'true', 'boolean', 'Enable pay on delivery'),
+]
+
+
+def ensure_default_settings():
+    """Seed editable store settings when the table is empty."""
+    if Settings.query.count() > 0:
+        return
+    for category, key, value, stype, desc in DEFAULT_SETTINGS:
+        setting = Settings(
+            setting_key=key,
+            category=category,
+            setting_type=stype,
+            description=desc,
+            is_editable=True,
+        )
+        setting.set_value(value)
+        db.session.add(setting)
+    db.session.commit()
 
 @settings_bp.route('/admin/settings', methods=['GET'])
 @jwt_required()
@@ -24,6 +54,7 @@ def admin_required(f):
 def get_all_settings():
     """Get all settings grouped by category"""
     try:
+        ensure_default_settings()
         settings = Settings.query.all()
         
         # Group settings by category

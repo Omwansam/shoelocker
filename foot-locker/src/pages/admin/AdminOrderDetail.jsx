@@ -1,25 +1,70 @@
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import {
-  ORDER_STATUSES,
-  getMockOrderById,
-} from '../../data/adminMock.js';
-import { useAdminOrderStatuses } from '../../hooks/useAdminOrderStatuses.js';
+import { BACKEND_ORDER_STATUSES, labelForOrderStatus } from '../../utils/orderStatus.js';
+import { fetchAdminOrderById, updateAdminOrderStatus } from '../../utils/api.js';
 import { formatPrice } from '../../utils/format.js';
 import { OrderStatusPill } from '../../components/admin/OrderStatusPill.jsx';
 
 export function AdminOrderDetail() {
   const { orderId } = useParams();
-  const raw = orderId ? getMockOrderById(orderId) : null;
-  const { getStatus, setStatus } = useAdminOrderStatuses();
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  if (!raw || !orderId) {
+  useEffect(() => {
+    if (!orderId) return;
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchAdminOrderById(orderId);
+        if (active) setOrder(data);
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'Failed to load order');
+          setOrder(null);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [orderId]);
+
+  async function handleStatusChange(newStatus) {
+    if (!order) return;
+    try {
+      await updateAdminOrderStatus(order.order_id, newStatus);
+      setOrder((prev) => (prev ? { ...prev, order_status: newStatus } : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[300px] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-red border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!order || !orderId) {
     return <Navigate to="/admin/orders" replace />;
   }
 
-  const status = getStatus(raw);
+  const displayId = order.id || `ORD-${String(order.order_id).padStart(3, '0')}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-rise">
+      {error ? (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      ) : null}
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link
@@ -28,15 +73,15 @@ export function AdminOrderDetail() {
           >
             ← Orders
           </Link>
-          <h1 className="mt-2 text-2xl font-bold tabular-nums text-neutral-950">
-            {raw.id}
-          </h1>
+          <h1 className="mt-2 text-2xl font-bold tabular-nums text-neutral-950">{displayId}</h1>
           <p className="mt-1 text-sm text-neutral-600">
             Placed{' '}
-            {new Date(raw.placedAt).toLocaleString('en-KE', {
-              dateStyle: 'full',
-              timeStyle: 'short',
-            })}
+            {order.order_date
+              ? new Date(order.order_date).toLocaleString('en-KE', {
+                  dateStyle: 'full',
+                  timeStyle: 'short',
+                })
+              : '—'}
           </p>
         </div>
         <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
@@ -44,25 +89,20 @@ export function AdminOrderDetail() {
             Fulfilment status
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <OrderStatusPill status={status} />
+            <OrderStatusPill status={order.order_status} />
             <select
               aria-label="Update status"
-              value={status}
-              onChange={(e) =>
-                setStatus(raw.id, /** @type {(typeof ORDER_STATUSES)[number]} */ (e.target.value))
-              }
+              value={order.order_status || 'pending'}
+              onChange={(e) => handleStatusChange(e.target.value)}
               className="rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-red/25"
             >
-              {ORDER_STATUSES.map((s) => (
+              {BACKEND_ORDER_STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {labelForOrderStatus(s)}
                 </option>
               ))}
             </select>
           </div>
-          <p className="mt-3 text-[11px] text-neutral-500">
-            Persisted locally for this demo — resets from Settings.
-          </p>
         </div>
       </div>
 
@@ -70,9 +110,9 @@ export function AdminOrderDetail() {
         <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Line items</h2>
           <ul className="divide-y divide-neutral-100">
-            {raw.items.map((item, idx) => (
+            {(order.items || []).map((item, idx) => (
               <li
-                key={`${item.productId}-${item.size}-${idx}`}
+                key={`${item.product_id}-${item.size}-${idx}`}
                 className="flex flex-wrap items-start justify-between gap-3 py-4 first:pt-0"
               >
                 <div className="min-w-0">
@@ -80,21 +120,21 @@ export function AdminOrderDetail() {
                     {item.brand} — {item.name}
                   </p>
                   <p className="text-sm text-neutral-600">
-                    Size {item.size} × {item.qty}
+                    {item.size ? `Size ${item.size} × ` : ''}{item.quantity}
                   </p>
-                  <Link
-                    to={`/product/${item.productId}`}
-                    className="mt-1 inline-block text-xs font-semibold text-brand-red hover:underline"
-                  >
-                    View product
-                  </Link>
+                  {item.product_slug ? (
+                    <Link
+                      to={`/product/${item.product_slug}`}
+                      className="mt-1 inline-block text-xs font-semibold text-brand-red hover:underline"
+                    >
+                      View product
+                    </Link>
+                  ) : null}
                 </div>
                 <div className="text-right text-sm tabular-nums">
-                  <p className="text-neutral-500">
-                    {formatPrice(item.unitPriceKes)} each
-                  </p>
+                  <p className="text-neutral-500">{formatPrice(item.price)} each</p>
                   <p className="font-semibold text-neutral-950">
-                    {formatPrice(item.lineTotalKes)}
+                    {formatPrice(item.line_total || item.price * item.quantity)}
                   </p>
                 </div>
               </li>
@@ -102,7 +142,7 @@ export function AdminOrderDetail() {
           </ul>
           <div className="flex justify-between border-t border-neutral-200 pt-4 text-base font-bold">
             <span>Total</span>
-            <span className="tabular-nums">{formatPrice(raw.totalKes)}</span>
+            <span className="tabular-nums">{formatPrice(Number(order.total_amount) || 0)}</span>
           </div>
         </section>
 
@@ -112,22 +152,18 @@ export function AdminOrderDetail() {
             <dl className="mt-3 space-y-2 text-sm">
               <div>
                 <dt className="text-neutral-500">Name</dt>
-                <dd className="font-medium">{raw.customer}</dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">Phone</dt>
-                <dd>
-                  <a className="font-medium text-brand-red" href={`tel:${raw.phone.replace(/\s/g, '')}`}>
-                    {raw.phone}
-                  </a>
-                </dd>
+                <dd className="font-medium">{order.user?.username || '—'}</dd>
               </div>
               <div>
                 <dt className="text-neutral-500">Email</dt>
                 <dd>
-                  <a className="font-medium text-brand-red" href={`mailto:${raw.customerEmail}`}>
-                    {raw.customerEmail}
-                  </a>
+                  {order.user?.email ? (
+                    <a className="font-medium text-brand-red" href={`mailto:${order.user.email}`}>
+                      {order.user.email}
+                    </a>
+                  ) : (
+                    '—'
+                  )}
                 </dd>
               </div>
             </dl>
@@ -138,17 +174,7 @@ export function AdminOrderDetail() {
             <dl className="mt-3 space-y-2 text-sm">
               <div>
                 <dt className="text-neutral-500">Address</dt>
-                <dd className="font-medium leading-snug">{raw.shippingAddress}</dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">City / county</dt>
-                <dd>
-                  {raw.city} · {raw.county}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">Courier</dt>
-                <dd>{raw.courier}</dd>
+                <dd className="font-medium leading-snug">{order.shipping_address || '—'}</dd>
               </div>
             </dl>
           </section>
@@ -158,43 +184,16 @@ export function AdminOrderDetail() {
             <dl className="mt-3 space-y-2 text-sm">
               <div>
                 <dt className="text-neutral-500">Method</dt>
-                <dd className="font-medium">{raw.paymentMethod}</dd>
+                <dd className="font-medium">{order.payment_method || '—'}</dd>
               </div>
-              {raw.mpesaRef ? (
-                <div>
-                  <dt className="text-neutral-500">Reference</dt>
-                  <dd className="font-mono tabular-nums">{raw.mpesaRef}</dd>
-                </div>
-              ) : null}
+              <div>
+                <dt className="text-neutral-500">Status</dt>
+                <dd className="font-medium">{order.payment_status || '—'}</dd>
+              </div>
             </dl>
           </section>
         </div>
       </div>
-
-      {raw.staffNotes ? (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
-          <h2 className="font-semibold text-amber-950">Staff notes</h2>
-          <p className="mt-2 text-sm text-amber-900">{raw.staffNotes}</p>
-        </section>
-      ) : null}
-
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Timeline</h2>
-        <ol className="mt-4 space-y-4 border-l-2 border-neutral-200 pl-4">
-          {raw.timeline.map((t, i) => (
-            <li key={`${t.at}-${i}`} className="relative">
-              <span className="absolute -left-[21px] top-1 size-2.5 rounded-full bg-brand-red ring-4 ring-white" />
-              <p className="text-sm font-medium text-neutral-950">{t.label}</p>
-              <p className="text-xs text-neutral-500">
-                {new Date(t.at).toLocaleString('en-KE', {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                })}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </section>
     </div>
   );
 }

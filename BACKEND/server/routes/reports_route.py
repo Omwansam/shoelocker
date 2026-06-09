@@ -15,7 +15,7 @@ def _extract_user_id():
     try:
         current_user = get_jwt_identity()
         if isinstance(current_user, dict):
-            return current_user.get('user_id')
+            return current_user.get('id') or current_user.get('user_id')
         return current_user
     except Exception as e:
         print(f"Error extracting user ID: {str(e)}")
@@ -524,22 +524,20 @@ def export_report():
             products = db.session.query(
                 Product.product_name,
                 Product.stock_quantity,
-                Product.price,
+                Product.product_price,
                 Category.category_name,
-                Product.reorder_level
             ).join(Category).all()
 
             output = io.StringIO()
             writer = csv.writer(output)
             
-            writer.writerow(['Product', 'Stock', 'Price', 'Category', 'Reorder Level'])
+            writer.writerow(['Product', 'Stock', 'Price', 'Category'])
             for product in products:
                 writer.writerow([
                     product.product_name,
                     product.stock_quantity,
-                    product.price,
+                    product.product_price,
                     product.category_name,
-                    product.reorder_level
                 ])
 
         elif report_type == 'customers':
@@ -550,7 +548,7 @@ def export_report():
                 User.first_name,
                 User.last_name,
                 User.created_at
-            ).filter(User.role == UserRole.CUSTOMER).all()
+            ).filter(User.is_admin == False).all()
 
             output = io.StringIO()
             writer = csv.writer(output)

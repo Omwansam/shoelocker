@@ -25,6 +25,7 @@ def _product_to_dict(product):
     return {
         "id": product.product_id,
         "product_id": product.product_id,
+        "product_slug": product.product_slug,
         "product_name": product.product_name,
         "product_description": product.product_description,
         "product_price": product.product_price,

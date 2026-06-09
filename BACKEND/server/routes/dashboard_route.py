@@ -6,7 +6,7 @@ Provides comprehensive dashboard data for the main overview page
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-from models import db, Order, OrderItem, Product, User, Payment, Category
+from models import db, Order, OrderItem, Product, User, Payment, Category, OrderStatus, PaymentStatus
 from sqlalchemy import func, desc, and_, extract
 from datetime import datetime, timedelta
 import calendar
@@ -103,6 +103,7 @@ def get_dashboard_overview():
         })
         
     except Exception as e:
+        db.session.rollback()
         print(f"Error in dashboard overview: {str(e)}")
         return jsonify({
             'success': False,
@@ -117,7 +118,7 @@ def get_current_stats(start_date, end_date):
     ).filter(
         Order.order_date >= start_date,
         Order.order_date <= end_date,
-        Order.order_status == 'delivered'
+        Order.order_status == OrderStatus.DELIVERED
     ).scalar() or 0
     
     # Total Orders
@@ -175,11 +176,11 @@ def calculate_stats_with_changes(current, previous):
     stats = [
         {
             'title': 'Total Revenue',
-            'value': f"${current['total_revenue']:,.0f}",
+            'value': f"KSh {current['total_revenue']:,.0f}",
             'change': f"{'+' if revenue_change >= 0 else ''}{revenue_change}%",
             'trend': 'up' if revenue_change >= 0 else 'down',
             'icon': 'FiDollarSign',
-            'target': f"${targets['total_revenue']:,.0f}",
+            'target': f"KSh {targets['total_revenue']:,.0f}",
             'progress': calculate_progress(current['total_revenue'], targets['total_revenue'])
         },
         {
@@ -202,11 +203,11 @@ def calculate_stats_with_changes(current, previous):
         },
         {
             'title': 'Avg Order Value',
-            'value': f"${current['avg_order_value']:.0f}",
+            'value': f"KSh {current['avg_order_value']:,.0f}",
             'change': f"{'+' if aov_change >= 0 else ''}{aov_change}%",
             'trend': 'up' if aov_change >= 0 else 'down',
             'icon': 'FiTarget',
-            'target': f"${targets['avg_order_value']:.0f}",
+            'target': f"KSh {targets['avg_order_value']:,.0f}",
             'progress': calculate_progress(current['avg_order_value'], targets['avg_order_value'])
         }
     ]
@@ -257,7 +258,7 @@ def get_category_distribution(start_date, end_date):
     ).join(Order, OrderItem.order_id == Order.order_id).filter(
         Order.order_date >= start_date,
         Order.order_date <= end_date,
-        Order.order_status == 'delivered'
+        Order.order_status == OrderStatus.DELIVERED
     ).group_by(Category.category_id).order_by(
         desc(func.sum(Order.total_amount))
     ).all()
@@ -311,16 +312,15 @@ def get_hourly_sales_pattern(start_date, end_date):
 def get_recent_orders(limit=5):
     """Get recent orders"""
     try:
-        # Use distinct to avoid duplicate orders from joins
         recent_orders = db.session.query(
             Order.order_id,
             User.username,
             Order.total_amount,
             Order.order_status,
             Order.order_date
-        ).join(User).filter(
+        ).join(User, User.id == Order.user_id).filter(
             Order.order_id.isnot(None)
-        ).distinct(Order.order_id).order_by(
+        ).order_by(
             Order.order_date.desc()
         ).limit(limit).all()
         
@@ -348,8 +348,8 @@ def get_recent_orders(limit=5):
                 'id': f"ORD-{order.order_id:03d}",
                 'customer': order.username,
                 'product': f"Order #{order.order_id}",  # Simplified product display
-                'amount': f"${order.total_amount:.0f}",
-                'status': str(order.order_status).title(),
+                'amount': f"KSh {order.total_amount:,.0f}",
+                'status': order.order_status.value if order.order_status else 'pending',
                 'time': time_ago
             })
         
@@ -357,6 +357,7 @@ def get_recent_orders(limit=5):
         return orders_data
         
     except Exception as e:
+        db.session.rollback()
         print(f"Error in get_recent_orders: {str(e)}")
         return []
 
@@ -371,7 +372,7 @@ def get_top_products(start_date, end_date, limit=5):
     ).filter(
         Order.order_date >= start_date,
         Order.order_date <= end_date,
-        Order.order_status == 'delivered'
+        Order.order_status == OrderStatus.DELIVERED
     ).group_by(Product.product_id).order_by(
         desc(func.sum(OrderItem.quantity))
     ).limit(limit).all()
@@ -445,7 +446,7 @@ def get_system_alerts():
     
     # Payment failure alert (if there are failed payments)
     failed_payments = Payment.query.filter(
-        Payment.payment_status == 'Failed'
+        Payment.payment_status == PaymentStatus.FAILED
     ).count()
     
     if failed_payments > 0:

@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SUPPORT_EMAIL } from '../config/brand.js';
 import { loginRequest, registerRequest } from '../utils/authApi.js';
 
 export function SignIn() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location.state?.from || '/shop';
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -41,6 +44,7 @@ export function SignIn() {
         const user = payload?.user;
         setMessage(`Welcome back, ${user?.username || user?.email || 'user'}!`);
         setSubmitted(true);
+        setTimeout(() => navigate(returnTo), 1200);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');

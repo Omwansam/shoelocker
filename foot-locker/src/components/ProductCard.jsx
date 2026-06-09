@@ -33,7 +33,7 @@ export function ProductCard({
     e.preventDefault();
     e.stopPropagation();
     const on = has(product.id);
-    toggle(product.id);
+    toggle(product.id, product.product_id);
     showToast(on ? 'Removed from wishlist' : 'Saved to wishlist', 'info');
   }
 

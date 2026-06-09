@@ -8,6 +8,7 @@ import { useCart } from '../hooks/useCart.js';
 import { useToast } from '../hooks/useToast.js';
 import { useWishlist } from '../hooks/useWishlist.js';
 import { FREE_SHIPPING_PDP_KES } from '../config/market.js';
+import { sizeLabelForType } from '../config/productTypes.js';
 import { formatPrice } from '../utils/format.js';
 
 /**
@@ -84,7 +85,7 @@ function ProductPurchase({ product }) {
 
   function handleWishlist() {
     const on = has(product.id);
-    toggle(product.id);
+    toggle(product.id, product.product_id);
     show(on ? 'Removed from wishlist' : 'Saved to wishlist', 'info');
   }
 
@@ -95,7 +96,7 @@ function ProductPurchase({ product }) {
           htmlFor={`pd-size-${product.id}`}
           className="text-xs font-semibold uppercase tracking-wider text-neutral-500"
         >
-                Size (US men's scale — stocked like Nike Kenya & adidas KE)
+          {sizeLabelForType(product.productType)}
         </label>
         <select
           id={`pd-size-${product.id}`}

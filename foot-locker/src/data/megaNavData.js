@@ -2,7 +2,7 @@
 
 /** @typedef {{ heading: string, links: MegaLinks }} MegaColumn */
 
-/** @type {{ men: MegaColumn[], women: MegaColumn[], kids: MegaColumn[] }} */
+/** @type {{ men: MegaColumn[], women: MegaColumn[], kids: MegaColumn[], apparel: MegaColumn[] }} */
 export const megaColumns = {
   men: [
     {
@@ -12,6 +12,15 @@ export const megaColumns = {
         { title: 'Casual', href: '/shop?category=men' },
         { title: 'Running', href: '/shop?category=men' },
         { title: "All Men's Shoes", href: '/shop?category=men' },
+      ],
+    },
+    {
+      heading: 'Apparel',
+      links: [
+        { title: "Men's hoodies", href: '/apparel?category=men&style=hoodies' },
+        { title: "Men's tees", href: '/apparel?category=men&style=tees' },
+        { title: "Men's shorts", href: '/apparel?category=men&style=shorts' },
+        { title: "All men's apparel", href: '/apparel?category=men' },
       ],
     },
     {
@@ -43,6 +52,15 @@ export const megaColumns = {
       ],
     },
     {
+      heading: 'Apparel',
+      links: [
+        { title: "Women's hoodies", href: '/apparel?category=women&style=hoodies' },
+        { title: "Women's jackets", href: '/apparel?category=women&style=jackets' },
+        { title: "Women's joggers", href: '/apparel?category=women&style=pants' },
+        { title: "All women's apparel", href: '/apparel?category=women' },
+      ],
+    },
+    {
       heading: 'Shop by size',
       links: [
         { title: '6', href: '/shop?category=women' },
@@ -69,6 +87,14 @@ export const megaColumns = {
       ],
     },
     {
+      heading: 'Apparel',
+      links: [
+        { title: "Kids' fleece sets", href: '/apparel?category=kids&style=hoodies' },
+        { title: "Kids' tees", href: '/apparel?category=kids&style=tees' },
+        { title: "All kids' apparel", href: '/apparel?category=kids' },
+      ],
+    },
+    {
       heading: 'Sizes',
       links: [
         { title: 'Big kids', href: '/shop?category=kids' },
@@ -79,6 +105,35 @@ export const megaColumns = {
       heading: 'Featured',
       links: [
         { title: 'New Arrivals', href: '/releases' },
+        { title: 'Sale', href: '/sale' },
+      ],
+    },
+  ],
+  apparel: [
+    {
+      heading: 'Shop by style',
+      links: [
+        { title: 'Hoodies & fleece', href: '/apparel?style=hoodies' },
+        { title: 'T-shirts', href: '/apparel?style=tees' },
+        { title: 'Shorts', href: '/apparel?style=shorts' },
+        { title: 'Jackets', href: '/apparel?style=jackets' },
+        { title: 'Pants & joggers', href: '/apparel?style=pants' },
+      ],
+    },
+    {
+      heading: 'Shop by gender',
+      links: [
+        { title: "Men's apparel", href: '/apparel?category=men' },
+        { title: "Women's apparel", href: '/apparel?category=women' },
+        { title: "Kids' apparel", href: '/apparel?category=kids' },
+        { title: 'All apparel', href: '/apparel' },
+      ],
+    },
+    {
+      heading: 'Also shop',
+      links: [
+        { title: 'Shoes', href: '/shop' },
+        { title: 'New arrivals', href: '/releases' },
         { title: 'Sale', href: '/sale' },
       ],
     },
@@ -99,6 +154,6 @@ export const megaBrands = [
 export const megaNewTrending = [
   { title: 'New arrivals', href: '/releases' },
   { title: 'Performance picks', href: '/shop?category=men' },
-  { title: 'Low profile classics', href: '/shop?category=women' },
+  { title: 'Apparel drop', href: '/apparel' },
   { title: 'Basketball vibes', href: '/shop?category=men' },
 ];

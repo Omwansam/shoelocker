@@ -8,6 +8,7 @@ import { SearchBar } from '../components/SearchBar.jsx';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { useProducts } from '../hooks/useProducts.js';
 import { SALE_MAX_KES } from '../config/market.js';
+import { PRODUCT_TYPES } from '../config/productTypes.js';
 import { formatPrice } from '../utils/format.js';
 import { priceBracketMatch } from '../utils/catalogFilters.js';
 
@@ -15,6 +16,7 @@ import { priceBracketMatch } from '../utils/catalogFilters.js';
 /** @typedef {import('../components/Filters.jsx').SortBy} SortBy */
 
 const VALID_CATEGORIES = /** @type {const} */ (['men', 'women', 'kids']);
+const VALID_TYPES = /** @type {const} */ (['shoes', 'apparel', 'accessories']);
 
 const defaultFilters = /** @type {FilterState} */ ({
   brand: 'all',
@@ -29,6 +31,7 @@ export function Shop() {
   const onSaleRoute = location.pathname === '/sale';
   const [searchParams] = useSearchParams();
   const catParam = searchParams.get('category') ?? 'all';
+  const typeParam = searchParams.get('type') ?? (onSaleRoute ? 'all' : 'shoes');
   const sortParam = searchParams.get('sort');
 
   /** @type {SortBy | null} */
@@ -45,6 +48,12 @@ export function Shop() {
     catParam !== 'all' && VALID_CATEGORIES.includes(catParam)
       ? catParam
       : null;
+
+  const productType = onSaleRoute
+    ? 'all'
+    : typeParam !== 'all' && VALID_TYPES.includes(typeParam)
+      ? typeParam
+      : 'shoes';
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 240);
@@ -93,6 +102,8 @@ export function Shop() {
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     let list = products.filter((p) => {
+      const pType = p.productType || PRODUCT_TYPES.SHOES;
+      if (productType !== 'all' && pType !== productType) return false;
       if (
         filters.brand !== 'all' &&
         p.brand !== filters.brand
@@ -128,7 +139,21 @@ export function Shop() {
         next.sort((a, b) => Number(b.isNew) - Number(a.isNew));
     }
     return next;
-  }, [debouncedSearch, filters, sortBy, products]);
+  }, [debouncedSearch, filters, sortBy, products, productType]);
+
+  const pageTitle = onSaleRoute
+    ? 'Sale'
+    : urlBrand
+      ? `Shop ${urlBrand}`
+      : productType === PRODUCT_TYPES.APPAREL
+        ? 'Shop apparel'
+        : 'Shop all shoes';
+
+  const pageDesc = onSaleRoute
+    ? `Sale wall: every style is ${formatPrice(SALE_MAX_KES)} or less — grab your Kenyan size.`
+    : productType === PRODUCT_TYPES.APPAREL
+      ? 'Hoodies, tees, shorts, and jackets — filter by brand, size, and gender.'
+      : 'Every price is in Kenyan Shillings — filter by brand, size, and category for your city run.';
 
   function patchFilters(/** @type {Partial<FilterState>} */ patch) {
     setStoredFilters((prev) => ({ ...prev, ...patch }));
@@ -138,12 +163,10 @@ export function Shop() {
     <div className="mx-auto max-w-[1440px] px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 animate-fade-rise">
         <h1 className="text-pretty text-3xl font-[800] uppercase tracking-tight text-black [font-stretch:condensed] sm:text-4xl">
-          {onSaleRoute ? 'Sale' : urlBrand ? `Shop ${urlBrand}` : 'Shop all shoes'}
+          {pageTitle}
         </h1>
         <p className="mt-2 max-w-xl text-neutral-600">
-          {onSaleRoute
-            ? `Sale wall: every style is ${formatPrice(SALE_MAX_KES)} or less — grab your Kenyan size.`
-            : 'Every price is in Kenyan Shillings — filter by brand, size, and category for your city run.'}
+          {pageDesc}
         </p>
       </div>
 

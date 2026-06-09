@@ -4,7 +4,8 @@ from extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from models import (ShoppingCart, CartItem, Order, OrderItem, Product, 
                    User, OrderStatus, ShippingStatus, DiscountType, 
-                   ProductImage, Payment, PaymentStatus, RefundStatus, Refund, Coupon)
+                   ProductImage, Payment, PaymentStatus, RefundStatus, Refund, Coupon,
+                   PaymentMethod)
 from sqlalchemy.exc import SQLAlchemyError
 
 order_bp = Blueprint('order', __name__)
@@ -68,6 +69,24 @@ def is_admin():
         return user and user.is_admin
     except:
         return False
+
+def _get_or_create_payment_method(user_id, method_name='pay_on_delivery'):
+    """Get or create a placeholder payment method for checkout."""
+    pm = PaymentMethod.query.filter_by(user_id=user_id, card_type=method_name).first()
+    if pm:
+        return pm.payment_method_id
+    pm = PaymentMethod(
+        user_id=user_id,
+        card_type=method_name,
+        card_number='N/A',
+        expiration_date='12/99',
+        security_code='000',
+        billing_address='N/A',
+    )
+    db.session.add(pm)
+    db.session.flush()
+    return pm.payment_method_id
+
 
 def calculate_shipping_cost(items, address):
     """Calculate shipping cost based on items and address"""
@@ -185,7 +204,10 @@ def checkout():
                 order_id=new_order.order_id,
                 product_id=product.product_id,
                 quantity=cart_item.quantity,
-                price=cart_item.price,
+                price=float(cart_item.price) if cart_item.price is not None else float(product.product_price),
+                size=cart_item.size,
+                product_name_snapshot=cart_item.product_name_snapshot or product.product_name,
+                product_brand_snapshot=cart_item.product_brand_snapshot or product.brand,
                 shipping_cost=shipping_cost,
                 tax="0.00",
                 discount=str(discount),
@@ -207,13 +229,14 @@ def checkout():
         else:
             payment_status = PaymentStatus.COMPLETED  # For bank transfer, mark as completed
             
+        payment_method_id = _get_or_create_payment_method(user_id, payment_method)
         payment = Payment(
             order_id=new_order.order_id,
             user_id=user_id,
             payment_amount=f"{total_amount:.2f}",
             transaction_id=f"txn_{datetime.now().strftime('%Y%m%d%H%M%S')}",
             payment_status=payment_status,
-            payment_method_id=1,  # Default to 1 for now
+            payment_method_id=payment_method_id,
             payment_date=db.func.current_timestamp()
         )
         db.session.add(payment)
@@ -256,7 +279,7 @@ def checkout():
 @jwt_required()
 def request_return(order_id):
     """Request a return for an order or specific items"""
-    user_id = get_jwt_identity()
+    user_id = _extract_user_id(get_jwt_identity())
     data = request.get_json()
     
     order = Order.query.filter_by(order_id=order_id, user_id=user_id).first()
@@ -374,6 +397,32 @@ def process_return(return_id):
         db.session.rollback()
         return jsonify({"error": "Failed to process return", "details": str(e)}), 500
 
+def _serialize_coupon(coupon):
+    return {
+        'coupon_id': coupon.coupon_id,
+        'code': coupon.code,
+        'discount_type': coupon.discount_type.value if coupon.discount_type else None,
+        'discount_value': coupon.discount_value,
+        'is_active': coupon.is_active,
+        'valid_from': coupon.valid_from.isoformat() if coupon.valid_from else None,
+        'valid_to': coupon.valid_to.isoformat() if coupon.valid_to else None,
+        'min_order_amount': coupon.min_order_amount,
+        'max_discount_amount': coupon.max_discount_amount,
+        'usage_limit': coupon.usage_limit,
+        'created_at': coupon.created_at.isoformat() if coupon.created_at else None,
+    }
+
+
+@order_bp.route('/coupons', methods=['GET'])
+@jwt_required()
+def list_coupons():
+    """Admin endpoint to list all coupons"""
+    if not is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    coupons = Coupon.query.order_by(Coupon.created_at.desc()).all()
+    return jsonify({'coupons': [_serialize_coupon(c) for c in coupons]}), 200
+
+
 @order_bp.route('/coupons', methods=['POST'])
 @jwt_required()
 def create_coupon():
@@ -388,31 +437,105 @@ def create_coupon():
         return jsonify({"error": "Missing required fields"}), 400
     
     try:
+        valid_to = data.get('valid_to')
+        if isinstance(valid_to, str) and valid_to:
+            try:
+                valid_to = datetime.fromisoformat(valid_to.replace('Z', '+00:00'))
+            except ValueError:
+                valid_to = datetime.strptime(valid_to[:10], '%Y-%m-%d')
+        valid_from = data.get('valid_from', datetime.now())
+        if isinstance(valid_from, str):
+            try:
+                valid_from = datetime.fromisoformat(valid_from.replace('Z', '+00:00'))
+            except ValueError:
+                valid_from = datetime.strptime(valid_from[:10], '%Y-%m-%d')
+
         coupon = Coupon(
-            code=data['code'],
+            code=str(data['code']).strip().upper(),
             discount_type=DiscountType(data['discount_type']),
-            discount_value=data['discount_value'],
+            discount_value=float(data['discount_value']),
             is_active=data.get('is_active', True),
-            valid_from=data.get('valid_from', datetime.now()),
-            valid_to=data.get('valid_to'),
+            valid_from=valid_from,
+            valid_to=valid_to,
             min_order_amount=data.get('min_order_amount'),
             max_discount_amount=data.get('max_discount_amount'),
-            usage_limit=data.get('usage_limit')
+            usage_limit=data.get('usage_limit', 999),
         )
         db.session.add(coupon)
         db.session.commit()
         
         return jsonify({
             "message": "Coupon created successfully",
-            "coupon_id": coupon.coupon_id,
-            "code": coupon.code
+            "coupon": _serialize_coupon(coupon),
         }), 201
         
-    except ValueError as e:
+    except ValueError:
         return jsonify({"error": "Invalid discount type"}), 400
     except SQLAlchemyError as e:
         db.session.rollback()
         return jsonify({"error": "Failed to create coupon", "details": str(e)}), 500
+
+
+@order_bp.route('/coupons/<int:coupon_id>', methods=['PUT'])
+@jwt_required()
+def update_coupon(coupon_id):
+    """Admin endpoint to update a coupon"""
+    if not is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    coupon = Coupon.query.get(coupon_id)
+    if not coupon:
+        return jsonify({"error": "Coupon not found"}), 404
+
+    data = request.get_json() or {}
+    try:
+        if 'is_active' in data:
+            coupon.is_active = bool(data['is_active'])
+        if 'discount_value' in data:
+            coupon.discount_value = float(data['discount_value'])
+        if 'min_order_amount' in data:
+            coupon.min_order_amount = data['min_order_amount']
+        if 'max_discount_amount' in data:
+            coupon.max_discount_amount = data['max_discount_amount']
+        if 'usage_limit' in data:
+            coupon.usage_limit = int(data['usage_limit'])
+        if 'valid_to' in data:
+            valid_to = data['valid_to']
+            if isinstance(valid_to, str) and valid_to:
+                try:
+                    coupon.valid_to = datetime.fromisoformat(valid_to.replace('Z', '+00:00'))
+                except ValueError:
+                    coupon.valid_to = datetime.strptime(valid_to[:10], '%Y-%m-%d')
+            else:
+                coupon.valid_to = None
+        db.session.commit()
+        return jsonify({"message": "Coupon updated", "coupon": _serialize_coupon(coupon)}), 200
+    except (ValueError, TypeError) as e:
+        db.session.rollback()
+        return jsonify({"error": "Invalid update payload", "details": str(e)}), 400
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to update coupon", "details": str(e)}), 500
+
+
+@order_bp.route('/coupons/<int:coupon_id>', methods=['DELETE'])
+@jwt_required()
+def delete_coupon(coupon_id):
+    """Admin endpoint to delete a coupon"""
+    if not is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    coupon = Coupon.query.get(coupon_id)
+    if not coupon:
+        return jsonify({"error": "Coupon not found"}), 404
+
+    try:
+        db.session.delete(coupon)
+        db.session.commit()
+        return jsonify({"message": "Coupon deleted"}), 200
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete coupon", "details": str(e)}), 500
 
 @order_bp.route('/coupons/validate', methods=['POST'])
 def validate_coupon():
@@ -455,6 +578,55 @@ def validate_coupon():
         "min_order_amount": str(coupon.min_order_amount) if coupon.min_order_amount else None,
         "max_discount_amount": str(coupon.max_discount_amount) if coupon.max_discount_amount else None
     }), 200
+
+@order_bp.route('/admin/<int:order_id>', methods=['GET'])
+@jwt_required()
+def get_admin_order_detail(order_id):
+    """Admin endpoint to get full order details"""
+    if not is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+
+    order = Order.query.get(order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    items = []
+    for oi in order.order_items or []:
+        prod = oi.product
+        items.append({
+            'order_item_id': oi.order_item_id,
+            'product_id': oi.product_id,
+            'product_slug': prod.product_slug if prod else None,
+            'name': prod.product_name if prod else '',
+            'brand': prod.brand if prod else '',
+            'size': oi.size if hasattr(oi, 'size') and oi.size else None,
+            'quantity': oi.quantity,
+            'price': float(oi.price) if oi.price is not None else 0,
+            'line_total': float(oi.price) * oi.quantity if oi.price is not None else 0,
+        })
+
+    user = order.user
+    payment = order.payment if hasattr(order, 'payment') else None
+
+    return jsonify({
+        'order_id': order.order_id,
+        'id': f"ORD-{order.order_id:03d}",
+        'order_date': order.order_date.isoformat() if order.order_date else None,
+        'total_amount': float(order.total_amount) if order.total_amount is not None else 0,
+        'order_status': order.order_status.value if order.order_status else None,
+        'shipping_address': order.shipping_address,
+        'user': {
+            'id': user.id if user else None,
+            'username': user.username if user else None,
+            'email': user.email if user else None,
+            'phone': getattr(user, 'phone', None) if user else None,
+        },
+        'items': items,
+        'items_count': len(items),
+        'payment_status': payment.payment_status.value if payment and payment.payment_status else None,
+        'payment_method': payment.payment_method.card_type if payment and payment.payment_method else None,
+    }), 200
+
 
 @order_bp.route('/admin/all', methods=['GET'])
 @jwt_required()

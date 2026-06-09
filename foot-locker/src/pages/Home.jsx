@@ -5,11 +5,15 @@ import { ProductCard } from '../components/ProductCard.jsx';
 import { ProductGridSkeleton } from '../components/ProductGridSkeleton.jsx';
 import { REWARDS_PROGRAM } from '../config/brand.js';
 import { useProducts } from '../hooks/useProducts.js';
+import { PRODUCT_TYPES } from '../config/productTypes.js';
 
 export function Home() {
   const { products, loading } = useProducts({ delayMs: 480 });
 
   const featured = [...products].filter((p) => p.isNew).slice(0, 4);
+  const apparelFeatured = [...products]
+    .filter((p) => p.productType === PRODUCT_TYPES.APPAREL)
+    .slice(0, 4);
   const trending =
     [...products].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8);
 
@@ -33,11 +37,11 @@ export function Home() {
       img: 'https://images.unsplash.com/photo-1600185365928-3a186820d81e?auto=format&fit=crop&w=900&q=80',
     },
     {
-      slug: 'kids',
+      slug: 'apparel',
       title: 'Clothing & Accessories',
-      subtitle: 'Coming soon • shop kicks now',
+      subtitle: 'Hoodies • tees • jackets',
       img: 'https://images.unsplash.com/photo-1556906781-9a412961c28c?auto=format&fit=crop&w=900&q=80',
-      href: '/shop',
+      href: '/apparel',
     },
   ];
 
@@ -51,6 +55,7 @@ export function Home() {
             ["Men's", '/shop?category=men'],
             ["Women's", '/shop?category=women'],
             ["Kids'", '/shop?category=kids'],
+            ['Apparel', '/apparel'],
             ['New arrivals', '/releases'],
             ['Releases', '/releases'],
             ['Sale', '/sale'],
@@ -164,6 +169,42 @@ export function Home() {
       </section>
 
       <BrandStrip />
+
+      {apparelFeatured.length > 0 ? (
+        <section className="border-y border-neutral-200 bg-neutral-950 py-14 text-white">
+          <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
+            <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.35em] text-brand-red">
+                  New department
+                </p>
+                <h2 className="mt-2 text-2xl font-[800] uppercase tracking-tighter [font-stretch:condensed] sm:text-3xl">
+                  Fresh apparel
+                </h2>
+                <p className="mt-2 max-w-lg text-neutral-400">
+                  Hoodies, tees, and jackets sized S–XXL — same brands, same KES
+                  pricing you know from the shoe wall.
+                </p>
+              </div>
+              <Link
+                to="/apparel"
+                className="inline-flex w-fit border-2 border-white px-6 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white transition hover:bg-white hover:text-neutral-950"
+              >
+                Shop all apparel
+              </Link>
+            </div>
+            {loading ? (
+              <ProductGridSkeleton count={4} />
+            ) : (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {apparelFeatured.map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <section className="border-y border-neutral-800 bg-neutral-950 py-14 text-white">
         <div className="mx-auto flex max-w-[1440px] flex-col items-start justify-between gap-8 px-4 sm:flex-row sm:items-center sm:px-6 lg:px-8">

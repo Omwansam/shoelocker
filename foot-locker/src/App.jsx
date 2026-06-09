@@ -25,6 +25,7 @@ import { SearchResults } from './pages/SearchResults.jsx';
 import { WishlistPage } from './pages/WishlistPage.jsx';
 import { Rewards } from './pages/Rewards.jsx';
 import { Shop } from './pages/Shop.jsx';
+import { Apparel } from './pages/Apparel.jsx';
 import { SignIn } from './pages/SignIn.jsx';
 import { StoreLocator } from './pages/StoreLocator.jsx';
 import { Support } from './pages/Support.jsx';
@@ -84,6 +85,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="shop" element={<Shop />} />
+        <Route path="apparel" element={<Apparel />} />
         <Route path="sale" element={<Shop />} />
         <Route
           path="releases"

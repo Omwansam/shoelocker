@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, create_refresh_token
 from extensions import db
-from models import User, Order, OrderItem, Product, PaymentMethod
+from models import User, Order, OrderItem, Product, PaymentMethod, OrderStatus
 from datetime import datetime, timedelta
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -95,7 +95,7 @@ def get_customers():
                 # Get total spent safely
                 total_spent_result = db.session.query(db.func.sum(Order.total_amount)).filter(
                     Order.user_id == user.id,
-                    Order.order_status == 'delivered'
+                    Order.order_status == OrderStatus.DELIVERED
                 ).scalar()
                 total_spent = float(total_spent_result) if total_spent_result else 0.0
                 
@@ -116,8 +116,8 @@ def get_customers():
                 }
                 customers.append(customer_data)
             except Exception as user_error:
+                db.session.rollback()
                 print(f"Error processing user {user.id}: {user_error}")
-                # Continue with other users
                 continue
         
         return jsonify({
@@ -174,7 +174,7 @@ def get_customer_stats():
             db.func.count(Order.order_id).label('order_count')
         ).join(Order).filter(
             User.is_admin == False,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(User.id).order_by(
             db.func.sum(Order.total_amount).desc()
         ).limit(10).all()

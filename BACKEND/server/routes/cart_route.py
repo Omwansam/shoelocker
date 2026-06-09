@@ -62,14 +62,17 @@ def get_cart():
         cart_items.append({
             'cart_item_id': item.cart_item_id,
             'product_id': product.product_id,
-            'product_name': product.product_name,
+            'product_slug': product.product_slug,
+            'product_name': item.product_name_snapshot or product.product_name,
             'description': product.product_description,
+            'brand': item.product_brand_snapshot or product.brand or '',
             'price': item.price,
             'quantity': item.quantity,
-            'image_url': image_url,
+            'size': item.size,
+            'image_url': item.product_image_snapshot or image_url,
             'stock_available': product.stock_quantity,
             'added_at': item.added_at.isoformat() if item.added_at else None,
-            'max_allowed': min(product.stock_quantity, 10)  # Example limit
+            'max_allowed': min(product.stock_quantity, 10)
         })
     
     response = jsonify({
@@ -138,10 +141,12 @@ def add_to_cart():
             db.session.add(cart)
             db.session.flush()
         
-        # Check if product already in cart
+        # Check if product already in cart (same product + size)
+        size = data.get('size')
         existing_item = CartItem.query.filter_by(
             shopping_cart_id=cart.shopping_cart_id,
-            product_id=product_id
+            product_id=product_id,
+            size=size,
         ).first()
         
         if existing_item:
@@ -160,14 +165,21 @@ def add_to_cart():
                 shopping_cart_id=cart.shopping_cart_id,
                 product_id=product_id,
                 price=f"{product.product_price:.2f}",
-                quantity=quantity
+                quantity=quantity,
+                size=size,
+                product_name_snapshot=product.product_name,
+                product_brand_snapshot=product.brand or '',
+                product_image_snapshot=data.get('image_url') or '',
             )
             db.session.add(new_item)
+            db.session.flush()
+            existing_item = new_item
         
         update_cart_total(cart)
-        
+
         response = jsonify({
             "message": "Item added to cart successfully",
+            "cart_item_id": existing_item.cart_item_id,
             "cart_total": cart.total_price,
             "items_count": cart.shopping_quantity
         })

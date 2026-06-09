@@ -13,11 +13,13 @@ users_bp = Blueprint('auth', __name__)
 
 # Utility function to retrieve the current logged-in user based on the JWT identity. and get the jwt_identity tokens
 def _extract_user_id(identity):
-    """Support both int identity and dict identity with {'id': ...}."""
+    """Resolve user id from JWT identity (string, int, or legacy dict)."""
     if identity is None:
         return None
     if isinstance(identity, dict):
-        return identity.get('id')
+        identity = identity.get('id')
+    if isinstance(identity, str) and identity.isdigit():
+        return int(identity)
     return identity
 
 
@@ -85,13 +87,13 @@ def refresh_token():
     user = db.session.get(User, user_id) if user_id else None
     role = _resolve_user_role(user) if user else UserRole.USER
     is_admin_flag = _is_admin_role(role) or bool(user.is_admin) if user else False
-    new_access_token = create_access_token(identity={
-        "id": user_id,
-        "is_admin": is_admin_flag
-    }, additional_claims={
-        "role": role.value,
-        "is_admin": is_admin_flag
-    })
+    new_access_token = create_access_token(
+        identity=str(user_id),
+        additional_claims={
+            "role": role.value,
+            "is_admin": is_admin_flag,
+        },
+    )
     return jsonify ({'access_token': new_access_token}), 200
 
 @users_bp.route('/users', methods=['GET', 'OPTIONS'])
@@ -188,16 +190,14 @@ def login():
         db.session.rollback()
         role = _resolve_user_role(user)
 
-    # Build identity payload (kept minimal) and include admin claims
-    identity_payload = {"id": user.id}
     is_admin_flag = _is_admin_role(role) or bool(user.is_admin)
     additional_claims = {
         "role": role.value,
         "is_admin": is_admin_flag
     }
 
-    access_token = create_access_token(identity=identity_payload, additional_claims=additional_claims)
-    refresh_token = create_refresh_token(identity=identity_payload, additional_claims=additional_claims)
+    access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+    refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
 
     return jsonify({
         "access_token": access_token,

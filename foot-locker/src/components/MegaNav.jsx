@@ -77,7 +77,7 @@ export function MegaPanel({ active }) {
 
   return (
     <div className="animate-fade-rise border-t border-neutral-200 bg-white shadow-xl">
-      <div className="mx-auto grid max-w-[1440px] gap-8 px-6 py-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto grid max-w-[1440px] gap-8 px-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
         {cols.map((c) => (
           <Column key={c.heading} heading={c.heading} links={c.links} />
         ))}

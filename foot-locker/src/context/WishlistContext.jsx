@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { WishlistContext } from './wishlistContext.js';
+import { isLoggedIn } from '../utils/auth.js';
+import {
+  addWishlistItem,
+  fetchWishlist,
+  removeWishlistItem,
+} from '../utils/api.js';
 
 const CHANGE = 'shoelocker-wishlist-changed';
 let memoryIds = [];
@@ -22,6 +28,7 @@ function writeIds(ids) {
 /** @param {{ children: import('react').ReactNode }} props */
 export function WishlistProvider({ children }) {
   const [ids, setIds] = useState(() => readIds());
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     function onChange() {
@@ -33,24 +40,59 @@ export function WishlistProvider({ children }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isLoggedIn()) return;
+    let active = true;
+    async function load() {
+      try {
+        const items = await fetchWishlist();
+        if (!active) return;
+        setProducts(items);
+        const slugIds = items.map((p) => p.id);
+        writeIds(slugIds);
+        setIds(slugIds);
+      } catch {
+        // Keep local state if API unavailable
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const has = useCallback((id) => ids.includes(id), [ids]);
 
-  const toggle = useCallback((id) => {
-    setIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      writeIds(next);
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(async (id, backendProductId) => {
+    const removing = ids.includes(id);
+    const next = removing ? ids.filter((x) => x !== id) : [...ids, id];
+    writeIds(next);
+    setIds(next);
+
+    if (!isLoggedIn() || !backendProductId) return;
+
+    try {
+      if (removing) {
+        await removeWishlistItem(backendProductId);
+        setProducts((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        await addWishlistItem(backendProductId);
+      }
+    } catch {
+      writeIds(ids);
+      setIds(ids);
+    }
+  }, [ids]);
 
   const value = useMemo(
     () => ({
       ids,
+      products,
       has,
       toggle,
       count: ids.length,
     }),
-    [ids, has, toggle],
+    [ids, products, has, toggle],
   );
 
   return (

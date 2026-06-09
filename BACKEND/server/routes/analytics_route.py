@@ -6,7 +6,7 @@ Provides comprehensive analytics data for charts and graphs
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-from models import db, Order, OrderItem, Product, User, Payment, Category
+from models import db, Order, OrderItem, Product, User, Payment, Category, OrderStatus
 from sqlalchemy import func, desc, and_, extract
 from datetime import datetime, timedelta
 import calendar
@@ -62,7 +62,7 @@ def get_dashboard_analytics():
             func.sum(Order.total_amount)
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).scalar() or 0
         
         total_customers = User.query.filter(
@@ -107,7 +107,7 @@ def get_dashboard_analytics():
             func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)).label('total_revenue')
         ).select_from(Product).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(Product.product_id).order_by(
             desc(func.sum(OrderItem.quantity))
         ).limit(10).all()
@@ -129,7 +129,7 @@ def get_dashboard_analytics():
             func.sum(Order.total_amount).label('revenue')
         ).select_from(Category).join(Product, Category.category_id == Product.category_id).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(Category.category_id).order_by(
             desc(func.sum(Order.total_amount))
         ).all()
@@ -147,7 +147,7 @@ def get_dashboard_analytics():
             func.count(User.id).label('count')
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(User.id).having(
             func.sum(Order.total_amount) >= 1000
         ).count()
@@ -156,7 +156,7 @@ def get_dashboard_analytics():
             func.count(User.id).label('count')
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(User.id).having(
             func.sum(Order.total_amount) >= 500,
             func.sum(Order.total_amount) < 1000
@@ -166,7 +166,7 @@ def get_dashboard_analytics():
             func.count(User.id).label('count')
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(User.id).having(
             func.sum(Order.total_amount) < 500
         ).count()
@@ -221,7 +221,7 @@ def get_sales_analytics():
             func.count(Order.order_id).label('orders')
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(
             extract('year', Order.order_date),
             extract('month', Order.order_date)
@@ -283,7 +283,7 @@ def get_sales_analytics():
             func.avg(Order.total_amount).label('avg_order_value')
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(
             func.date(Order.order_date)
         ).order_by(
@@ -355,7 +355,7 @@ def get_customer_analytics():
             func.avg(Order.total_amount).label('avg_order_value')
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(User.id).order_by(
             desc(func.sum(Order.total_amount))
         ).limit(20).all()
@@ -375,7 +375,7 @@ def get_customer_analytics():
             func.count(User.id).label('repeat_customers')
         ).select_from(User).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(User.id).having(
             func.count(Order.order_id) > 1
         ).count()
@@ -384,7 +384,7 @@ def get_customer_analytics():
             func.count(User.id)
         ).select_from(User).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).count()
         
         repeat_rate = (repeat_customers / total_customers * 100) if total_customers > 0 else 0
@@ -425,7 +425,7 @@ def get_product_analytics():
             func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)).label('revenue')
         ).select_from(Category).join(Product, Category.category_id == Product.category_id).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(Category.category_id).order_by(
             desc(func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)))
         ).all()
@@ -449,7 +449,7 @@ def get_product_analytics():
             func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)).label('revenue')
         ).select_from(Product).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(Product.product_id).order_by(
             desc(func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)))
         ).limit(15).all()
@@ -473,7 +473,7 @@ def get_product_analytics():
             func.sum(OrderItem.quantity).label('sold_quantity')
         ).select_from(Product).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(Product.product_id).order_by(
             desc(func.sum(OrderItem.quantity))
         ).limit(20).all()
@@ -523,7 +523,7 @@ def get_financial_analytics():
             func.sum(Order.total_amount).label('revenue')
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(
             func.date(Order.order_date)
         ).order_by(
@@ -564,7 +564,7 @@ def get_financial_analytics():
             func.sum(Payment.payment_amount).label('total_amount')
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).group_by(Payment.payment_status).all()
         
         payment_data = []
@@ -624,7 +624,7 @@ def get_real_time_analytics():
         ).filter(
             Order.order_date >= today_start,
             Order.order_date <= today_end,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).scalar() or 0
         
         today_customers = User.query.filter(
@@ -641,7 +641,7 @@ def get_real_time_analytics():
             func.sum(Order.total_amount)
         ).filter(
             Order.order_date >= current_month,
-            Order.order_status == 'delivered'
+            Order.order_status == OrderStatus.DELIVERED
         ).scalar() or 0
         
         # Pending orders

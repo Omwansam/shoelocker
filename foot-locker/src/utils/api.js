@@ -34,6 +34,7 @@ function transformBackendProduct(product) {
     name: product.product_name,
     brand: product.brand || '',
     category: product.storefront_category || 'men',
+    productType: product.product_type || 'shoes',
     price: product.product_price,
     isNew: product.is_new || false,
     sizes: product.sizes || [],
@@ -52,19 +53,45 @@ function transformBackendProduct(product) {
 export const api = axios.create({
   baseURL: API_CONFIG.baseURL,
   timeout: API_CONFIG.timeout,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
-// Add JWT token to requests if available
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Request interceptor: Add JWT token to authenticated requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    if (token) {
+      if (!config.headers) {
+        config.headers = {};
+      }
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
+
+// Response interceptor: Handle token expiration on protected routes only
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const url = error.config?.url || '';
+      const isPublicRead =
+        url.includes('/api/product') ||
+        url.includes('/api/bestsellers') ||
+        url.includes('/api/recent') ||
+        url.includes('/api/related-products') ||
+        url.includes('/categories');
+      if (!isPublicRead) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 /** Fallback mock adapter for when backend is unavailable */
 async function mockApiAdapter(config) {
@@ -99,7 +126,6 @@ async function mockApiAdapter(config) {
 export async function fetchProducts(opts = {}) {
   try {
     if (API_CONFIG.useMockAPI) {
-      // Use mock API
       const mockConfig = {
         url: '/products',
         method: 'get',
@@ -110,23 +136,26 @@ export async function fetchProducts(opts = {}) {
       return response.data;
     }
 
-    // Try real backend first
+    const params = {
+      page: opts.page || 1,
+      per_page: opts.perPage || 1000,
+    };
+    if (opts.productType) params.product_type = opts.productType;
+    if (opts.storefrontCategory) params.storefront_category = opts.storefrontCategory;
+    if (opts.search) params.search = opts.search;
+
     const res = await api.get('/api/product', {
-      params: {
-        page: 1,
-        per_page: 1000,
-      },
+      params,
       signal: opts.signal,
     });
 
-    // Transform backend response
     if (res.data && res.data.products) {
       return res.data.products.map(transformBackendProduct);
     }
     return res.data || [];
   } catch (error) {
+    if (opts.throwOnError) throw error;
     console.warn('Backend API failed, falling back to mock data:', error.message);
-    // Fallback to mock if backend fails
     return mergeCatalogList();
   }
 }
@@ -284,4 +313,294 @@ export async function uploadProductImage(productId, imageFile, isPrimary = false
     console.error('Failed to upload product image:', error);
     throw error;
   }
+}
+
+/**
+ * Fetch comprehensive admin dashboard overview
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function fetchAdminDashboardOverview(opts = {}) {
+  try {
+    const res = await api.get('/dashboard/admin/overview', {
+      signal: opts.signal,
+    });
+    return res.data;
+  } catch (error) {
+    console.error('Failed to fetch admin dashboard overview:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch admin orders list with filtering and search
+ * @param {any} params
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function fetchAdminOrders(params = {}, opts = {}) {
+  try {
+    const res = await api.get('/orders/admin/all', {
+      params,
+      signal: opts.signal,
+    });
+    return res.data;
+  } catch (error) {
+    console.error('Failed to fetch admin orders:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update order status (admin)
+ * @param {number|string} orderId
+ * @param {string} status
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function updateAdminOrderStatus(orderId, status, opts = {}) {
+  try {
+    const res = await api.put(`/orders/admin/${orderId}/status`, { status }, {
+      signal: opts.signal,
+    });
+    return res.data;
+  } catch (error) {
+    console.error(`Failed to update order status for order ${orderId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch CRM admin customers
+ * @param {any} params
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function fetchAdminCustomers(params = {}, opts = {}) {
+  try {
+    const res = await api.get('/customers/admin/customers', {
+      params,
+      signal: opts.signal,
+    });
+    return res.data;
+  } catch (error) {
+    console.error('Failed to fetch admin customers:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch admin analytics data
+ * @param {any} params
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function fetchAdminAnalytics(params = {}, opts = {}) {
+  try {
+    const res = await api.get('/analytics/admin/dashboard', {
+      params,
+      signal: opts.signal,
+    });
+    return res.data;
+  } catch (error) {
+    console.error('Failed to fetch admin analytics:', error);
+    throw error;
+  }
+}
+
+/**
+ * Export admin CSV report
+ * @param {string} type - 'sales', 'inventory', 'customers'
+ * @param {number} days
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any>}
+ */
+export async function exportAdminReport(type = 'sales', days = 30, opts = {}) {
+  try {
+    const res = await api.get('/reports/admin/reports/export', {
+      params: { type, format: 'csv', days },
+      signal: opts.signal,
+    });
+    return res.data;
+  } catch (error) {
+    console.error(`Failed to export admin report of type ${type}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch single admin order detail
+ * @param {number|string} orderId
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function fetchAdminOrderById(orderId, opts = {}) {
+  const res = await api.get(`/orders/admin/${orderId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/**
+ * Fetch current user's orders
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function fetchMyOrders(opts = {}) {
+  const res = await api.get('/orders/me', { signal: opts.signal });
+  return res.data?.orders || [];
+}
+
+/**
+ * Place checkout order
+ * @param {{ shipping_address: string, payment_method?: string, coupon_code?: string }} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function checkoutOrder(payload, opts = {}) {
+  const res = await api.post('/orders/checkout', payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchCart(opts = {}) {
+  const res = await api.get('/cart', { signal: opts.signal });
+  return res.data;
+}
+
+/**
+ * @param {{ product_id: number, quantity?: number, size?: string, image_url?: string }} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function addCartItem(payload, opts = {}) {
+  const res = await api.post('/cart/items', payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} itemId @param {number} quantity @param {{ signal?: AbortSignal }} [opts] */
+export async function updateCartItem(itemId, quantity, opts = {}) {
+  const res = await api.put(`/cart/items/${itemId}`, { quantity }, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} itemId @param {{ signal?: AbortSignal }} [opts] */
+export async function removeCartItem(itemId, opts = {}) {
+  const res = await api.delete(`/cart/items/${itemId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function clearServerCart(opts = {}) {
+  try {
+    const res = await api.delete('/cart', { signal: opts.signal });
+    return res.data;
+  } catch (error) {
+    if (error.response?.status === 404) return { message: 'No cart' };
+    throw error;
+  }
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchWishlist(opts = {}) {
+  const res = await api.get('/wishlist', { signal: opts.signal });
+  return (res.data?.items || []).map((p) =>
+    transformBackendProduct({
+      ...p,
+      product_slug: p.product_slug || `prod-${p.product_id}`,
+      image: p.image_url,
+    }),
+  );
+}
+
+/** @param {number} productId @param {{ signal?: AbortSignal }} [opts] */
+export async function addWishlistItem(productId, opts = {}) {
+  const res = await api.post('/wishlist', { product_id: productId }, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} productId @param {{ signal?: AbortSignal }} [opts] */
+export async function removeWishlistItem(productId, opts = {}) {
+  const res = await api.delete(`/wishlist/${productId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchOrderStats(days = 30, opts = {}) {
+  const res = await api.get('/orders/admin/stats', { params: { days }, signal: opts.signal });
+  return res.data;
+}
+
+/** Map server cart items to frontend line items */
+export function mapServerCartItems(serverItems) {
+  return (serverItems || []).map((item) => {
+    const slug = item.product_slug || `prod-${item.product_id}`;
+    const size = item.size || 'OS';
+    return {
+      lineId: `${slug}::${size}`,
+      productId: slug,
+      backendProductId: item.product_id,
+      serverCartItemId: item.cart_item_id,
+      size,
+      qty: item.quantity,
+      snapshot: {
+        name: item.product_name,
+        brand: item.brand || '',
+        price: parseFloat(item.price) || 0,
+        image: item.image_url || '',
+      },
+    };
+  });
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function loadPersistedCart(opts = {}) {
+  const data = await fetchCart(opts);
+  return mapServerCartItems(data.items);
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchAdminCoupons(opts = {}) {
+  const res = await api.get('/orders/coupons', { signal: opts.signal });
+  return res.data?.coupons || [];
+}
+
+/**
+ * @param {any} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function createCoupon(payload, opts = {}) {
+  const res = await api.post('/orders/coupons', payload, { signal: opts.signal });
+  return res.data;
+}
+
+/**
+ * @param {number} couponId
+ * @param {any} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function updateCoupon(couponId, payload, opts = {}) {
+  const res = await api.put(`/orders/coupons/${couponId}`, payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} couponId @param {{ signal?: AbortSignal }} [opts] */
+export async function deleteCoupon(couponId, opts = {}) {
+  const res = await api.delete(`/orders/coupons/${couponId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {string} code @param {{ signal?: AbortSignal }} [opts] */
+export async function validateCoupon(code, opts = {}) {
+  const res = await api.post('/orders/coupons/validate', { code }, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchAdminSettings(opts = {}) {
+  const res = await api.get('/settings/admin/settings', { signal: opts.signal });
+  return res.data;
+}
+
+/**
+ * @param {Array<{ category: string, setting_key: string, value: any }>} updates
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function bulkUpdateSettings(updates, opts = {}) {
+  const res = await api.put('/settings/admin/settings/bulk-update', { updates }, { signal: opts.signal });
+  return res.data;
 }

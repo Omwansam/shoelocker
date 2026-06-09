@@ -14,6 +14,171 @@ product_bp = Blueprint('products', __name__)
 
 MAX_IMAGES_PER_PRODUCT = 10 
 
+def serialize_product(product):
+    # Get primary image
+    primary_image = ProductImage.query.filter_by(
+        product_id=product.product_id, 
+        is_primary=True
+    ).first()
+    
+    # If no primary image but we have other images, make the first one primary
+    if not primary_image:
+        first_image = ProductImage.query.filter_by(product_id=product.product_id).first()
+        if first_image:
+            first_image.is_primary = True
+            try:
+                db.session.commit()
+            except:
+                db.session.rollback()
+            primary_image = first_image
+            
+    # Get category name
+    category_name = None
+    if product.category_id:
+        category = Category.query.get(product.category_id)
+        category_name = category.category_name if category else None
+
+    # Helper to convert relative path to absolute static URL
+    def make_absolute_url(path):
+        if not path:
+            return None
+        path_str = str(path).strip()
+        if path_str.startswith('http://') or path_str.startswith('https://'):
+            return path_str
+        # If it starts with static/, strip it because url_for('static') prepends static/
+        if path_str.startswith('static/'):
+            path_str = path_str[7:]
+        # Remove any leading slashes
+        path_str = path_str.lstrip('/')
+        return url_for('static', filename=path_str, _external=True)
+
+    # Convert gallery paths to absolute URLs
+    gallery_absolute = []
+    if product.gallery:
+        gallery_list = product.gallery
+        if isinstance(gallery_list, str):
+            try:
+                gallery_list = json.loads(gallery_list)
+            except:
+                gallery_list = []
+        if isinstance(gallery_list, list):
+            for g_path in gallery_list:
+                abs_url = make_absolute_url(g_path)
+                if abs_url:
+                    gallery_absolute.append(abs_url)
+
+    # Also handle sizes
+    sizes_list = product.sizes or []
+    if isinstance(sizes_list, str):
+        try:
+            sizes_list = json.loads(sizes_list)
+        except:
+            sizes_list = []
+
+    return {
+        'id': product.product_slug or f"prod-{product.product_id}",
+        'product_id': product.product_id,
+        'product_slug': product.product_slug,
+        'product_name': product.product_name,
+        'brand': product.brand,
+        'storefront_category': product.storefront_category,
+        'product_type': product.product_type or 'shoes',
+        'is_new': product.is_new,
+        'sizes': sizes_list,
+        'product_description': product.product_description,
+        'product_price': float(product.product_price),
+        'image': make_absolute_url(product.image),
+        'hover_image': make_absolute_url(product.hover_image),
+        'gallery': gallery_absolute,
+        'stock_quantity': product.stock_quantity,
+        'category_id': product.category_id,
+        'category_name': category_name,
+        'created_at': product.created_at.isoformat() if product.created_at else None,
+        'updated_at': product.updated_at.isoformat() if product.updated_at else None,
+        'primary_image': make_absolute_url(primary_image.image_url) if primary_image else None,
+        'images': [{
+            'image_id': img.image_id, 
+            'image_url': make_absolute_url(img.image_url), 
+            'is_primary': img.is_primary
+        } for img in product.images],
+        'all_images': [{
+            'image_id': img.image_id,
+            'image_url': make_absolute_url(img.image_url),
+            'is_primary': img.is_primary
+        } for img in product.images]
+    }
+
+
+def sync_product_images(product):
+    """
+    Ensure the ProductImage table is completely in sync with the product's 
+    direct image fields (image, gallery).
+    """
+    # Get all current ProductImage records for the product
+    existing_images = ProductImage.query.filter_by(product_id=product.product_id).all()
+    existing_urls = {img.image_url: img for img in existing_images}
+    
+    # Determine target image paths
+    target_primary = product.image
+    
+    target_gallery = product.gallery or []
+    if isinstance(target_gallery, str):
+        try:
+            target_gallery = json.loads(target_gallery)
+        except:
+            target_gallery = []
+            
+    # Keep track of which image URLs we want to keep in the ProductImage table
+    to_keep = set()
+    
+    # Handle primary image
+    if target_primary:
+        norm_primary = target_primary
+        if norm_primary in existing_urls:
+            existing_urls[norm_primary].is_primary = True
+            to_keep.add(norm_primary)
+        else:
+            # Create new primary
+            new_img = ProductImage(
+                image_url=norm_primary,
+                is_primary=True,
+                product_id=product.product_id
+            )
+            db.session.add(new_img)
+            to_keep.add(norm_primary)
+            
+        # Ensure other images are not primary
+        for url, img in existing_urls.items():
+            if url != norm_primary:
+                img.is_primary = False
+                
+    # Handle gallery images
+    if isinstance(target_gallery, list):
+        for g_path in target_gallery:
+            if not g_path:
+                continue
+            norm_g = g_path
+            if norm_g in existing_urls:
+                to_keep.add(norm_g)
+            else:
+                # Create new gallery image
+                new_img = ProductImage(
+                    image_url=norm_g,
+                    is_primary=False,
+                    product_id=product.product_id
+                )
+                db.session.add(new_img)
+                to_keep.add(norm_g)
+            
+    # Delete any ProductImage records that are no longer referenced in product.image or product.gallery
+    for url, img in existing_urls.items():
+        if url not in to_keep:
+            try:
+                delete_image_file(img.image_url)
+            except:
+                pass
+            db.session.delete(img) 
+
 # Get best sellers (products with most orders and highest ratings) - Using different path to avoid conflicts
 @product_bp.route('/bestsellers', methods=['GET'])
 def get_best_sellers():
@@ -33,36 +198,9 @@ def get_best_sellers():
         
         result = []
         for product, order_count, avg_rating in best_sellers:
-            # Get primary image for the product
-            primary_image = ProductImage.query.filter_by(
-                product_id=product.product_id, 
-                is_primary=True
-            ).first()
-            
-            product_data = {
-                'product_id': product.product_id,
-                'product_slug': product.product_slug,
-                'product_name': product.product_name,
-                'brand': product.brand,
-                'storefront_category': product.storefront_category,
-                'is_new': product.is_new,
-                'sizes': product.sizes or [],
-                'product_description': product.product_description,
-                'product_price': float(product.product_price),
-                'image': product.image,
-                'hover_image': product.hover_image,
-                'gallery': product.gallery or [],
-                'stock_quantity': product.stock_quantity,
-                'category_id': product.category_id,
-                'order_count': order_count or 0,
-                'avg_rating': float(avg_rating) if avg_rating else 0.0,
-                'primary_image': url_for('static', filename=primary_image.image_url, _external=True) if primary_image else None,
-                'all_images': [{
-                    'image_id': img.image_id,
-                    'image_url': url_for('static', filename=img.image_url, _external=True),
-                    'is_primary': img.is_primary
-                } for img in product.images]
-            }
+            product_data = serialize_product(product)
+            product_data['order_count'] = order_count or 0
+            product_data['avg_rating'] = float(avg_rating) if avg_rating else 0.0
             result.append(product_data)
         
         return jsonify(result), 200
@@ -82,36 +220,7 @@ def get_recent_products():
         
         result = []
         for product in recent_products:
-            # Get primary image for the product
-            primary_image = ProductImage.query.filter_by(
-                product_id=product.product_id, 
-                is_primary=True
-            ).first()
-            
-            product_data = {
-                'product_id': product.product_id,
-                'product_slug': product.product_slug,
-                'product_name': product.product_name,
-                'brand': product.brand,
-                'storefront_category': product.storefront_category,
-                'is_new': product.is_new,
-                'sizes': product.sizes or [],
-                'product_description': product.product_description,
-                'product_price': float(product.product_price),
-                'image': product.image,
-                'hover_image': product.hover_image,
-                'gallery': product.gallery or [],
-                'stock_quantity': product.stock_quantity,
-                'category_id': product.category_id,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
-                'primary_image': url_for('static', filename=primary_image.image_url, _external=True) if primary_image else None,
-                'all_images': [{
-                    'image_id': img.image_id,
-                    'image_url': url_for('static', filename=img.image_url, _external=True),
-                    'is_primary': img.is_primary
-                } for img in product.images]
-            }
-            result.append(product_data)
+            result.append(serialize_product(product))
         
         return jsonify(result), 200
         
@@ -130,40 +239,7 @@ def get_recent_products_alt():
         
         result = []
         for product in recent_products:
-            # Get primary image for the product
-            primary_image = ProductImage.query.filter_by(
-                product_id=product.product_id, 
-                is_primary=True
-            ).first()
-            
-            product_data = {
-                'product_id': product.product_id,
-                'product_slug': product.product_slug,
-                'product_name': product.product_name,
-                'brand': product.brand,
-                'storefront_category': product.storefront_category,
-                'is_new': product.is_new,
-                'sizes': product.sizes or [],
-                'product_description': product.product_description,
-                'product_price': float(product.product_price),
-
-                'image': product.image,
-
-                'hover_image': product.hover_image,
-
-                'gallery': product.gallery or [],
-
-                'stock_quantity': product.stock_quantity,
-                'category_id': product.category_id,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
-                'primary_image': url_for('static', filename=primary_image.image_url, _external=True) if primary_image else None,
-                'all_images': [{
-                    'image_id': img.image_id,
-                    'image_url': url_for('static', filename=img.image_url, _external=True),
-                    'is_primary': img.is_primary
-                } for img in product.images]
-            }
-            result.append(product_data)
+            result.append(serialize_product(product))
         
         return jsonify(result), 200
         
@@ -213,7 +289,8 @@ def create_product():
         product_description=data.get('product_description'),
         product_price=float(data.get('product_price', 0)),  # Convert to float
         stock_quantity=int(data.get('stock_quantity', 0)),  # Convert to int
-        category_id=int(data.get('category_id', 0))
+        category_id=int(data.get('category_id', 0)),
+        product_type=data.get('product_type', 'shoes') or 'shoes',
     )
     db.session.add(new_product)
     db.session.flush() # Get product_id before saving images
@@ -249,31 +326,18 @@ def create_product():
         new_product.gallery = gallery_paths
     elif gallery:
         new_product.gallery = gallery
+
+    # Synchronize ProductImage table with direct image columns
+    sync_product_images(new_product)
         
     db.session.commit()
-    
-    # Process images
-    if files:
-        for idx, img in enumerate(files[:MAX_IMAGES_PER_PRODUCT]):  # Limit number of images
-            if img.filename == '':
-                continue
-                
-            image_path = save_product_image(img, new_product.product_id)
-            if image_path:
-                is_primary = (idx == 0)  # First image becomes primary
-                new_image = ProductImage(
-                    image_url=image_path,
-                    is_primary=is_primary,
-                    product_id=new_product.product_id
-                )
-                db.session.add(new_image)
-        
-        db.session.commit()
 
     return jsonify({
         'message': 'Product created successfully',
         'product_id': new_product.product_id,
-        'image_count': min(len(files), MAX_IMAGES_PER_PRODUCT)
+        'image': new_product.image,
+        'hover_image': new_product.hover_image,
+        'gallery': new_product.gallery
     }), 201
 
 # Get all products
@@ -292,6 +356,8 @@ def get_products():
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
         category_id = request.args.get('category_id', type=int)
+        product_type = request.args.get('product_type', '').strip()
+        storefront_category = request.args.get('storefront_category', '').strip()
         search = request.args.get('search', '').strip()
         status = request.args.get('status', '').strip()
         sort_by = request.args.get('sort_by', 'product_name')
@@ -303,6 +369,12 @@ def get_products():
         # Apply filters
         if category_id:
             query = query.filter(Product.category_id == category_id)
+
+        if product_type:
+            query = query.filter(Product.product_type == product_type)
+
+        if storefront_category:
+            query = query.filter(Product.storefront_category == storefront_category)
         
         if search:
             query = query.filter(
@@ -350,44 +422,7 @@ def get_products():
         # Format response
         products_data = []
         for product in paginated_products.items:
-            # Get primary image
-            primary_image = ProductImage.query.filter_by(
-                product_id=product.product_id, 
-                is_primary=True
-            ).first()
-            
-            # Get category name
-            category_name = None
-            if product.category_id:
-                category = Category.query.get(product.category_id)
-                category_name = category.category_name if category else None
-            
-            product_data = {
-                'product_id': product.product_id,
-                'product_slug': product.product_slug,
-                'product_name': product.product_name,
-                'brand': product.brand,
-                'storefront_category': product.storefront_category,
-                'is_new': product.is_new,
-                'sizes': product.sizes or [],
-                'product_description': product.product_description,
-                'product_price': float(product.product_price),
-                'image': product.image,
-                'hover_image': product.hover_image,
-                'gallery': product.gallery or [],
-                'stock_quantity': product.stock_quantity,
-                'category_id': product.category_id,
-                'category_name': category_name,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
-                'updated_at': product.updated_at.isoformat() if product.updated_at else None,
-                'primary_image': url_for('static', filename=primary_image.image_url, _external=True) if primary_image else None,
-                'images': [{
-                    'image_id': img.image_id, 
-                    'image_url': url_for('static', filename=img.image_url, _external=True), 
-                    'is_primary': img.is_primary
-                } for img in product.images]
-            }
-            products_data.append(product_data)
+            products_data.append(serialize_product(product))
         
         response = jsonify({
             'products': products_data,
@@ -409,7 +444,7 @@ def get_products():
         return jsonify({'error': f'Error fetching products: {str(e)}'}), 500
 
 # Get related products by category - Simple route
-@product_bp.route('/related-products/<int:product_id>', methods=['GET', 'OPTIONS'])
+@product_bp.route('/related-products/<product_id>', methods=['GET', 'OPTIONS'])
 def get_related_products_simple(product_id):
     """Simple route for related products to avoid CORS issues."""
     print(f"🔍 Simple related products route called for product_id: {product_id}, method: {request.method}")
@@ -425,69 +460,32 @@ def get_related_products_simple(product_id):
     
     try:
         print(f"🔍 Processing GET request for product_id: {product_id} (simple route)")
-        # Get the current product to find its category
-        current_product = Product.query.get(product_id)
+        
+        current_product = None
+        if str(product_id).isdigit():
+            current_product = Product.query.get(int(product_id))
+        if not current_product:
+            current_product = Product.query.filter_by(product_slug=product_id).first()
+            
         if not current_product:
             return jsonify({"error": "Product not found"}), 404
         
         # Get related products from the same category (excluding the current product)
         related_products = Product.query.filter(
             Product.category_id == current_product.category_id,
-            Product.product_id != product_id
+            Product.product_id != current_product.product_id
         ).limit(4).all()
         
         # If we don't have enough products in the same category, get some from other categories
         if len(related_products) < 4:
             additional_products = Product.query.filter(
-                Product.product_id != product_id,
+                Product.product_id != current_product.product_id,
                 Product.product_id.notin_([p.product_id for p in related_products])
             ).limit(4 - len(related_products)).all()
             related_products.extend(additional_products)
         
         # Format response
-        products_data = []
-        for product in related_products:
-            # Get primary image
-            primary_image = ProductImage.query.filter_by(
-                product_id=product.product_id, 
-                is_primary=True
-            ).first()
-            
-            # Get category name
-            category_name = None
-            if product.category_id:
-                category = Category.query.get(product.category_id)
-                category_name = category.category_name if category else None
-            
-            product_data = {
-                'product_id': product.product_id,
-                'product_slug': product.product_slug,
-                'product_name': product.product_name,
-                'brand': product.brand,
-                'storefront_category': product.storefront_category,
-                'is_new': product.is_new,
-                'sizes': product.sizes or [],
-                'product_description': product.product_description,
-                'product_price': float(product.product_price),
-
-                'image': product.image,
-
-                'hover_image': product.hover_image,
-
-                'gallery': product.gallery or [],
-
-                'stock_quantity': product.stock_quantity,
-                'category_id': product.category_id,
-                'category_name': category_name,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
-                'primary_image': url_for('static', filename=primary_image.image_url, _external=True) if primary_image else None,
-                'images': [{
-                    'image_id': img.image_id, 
-                    'image_url': url_for('static', filename=img.image_url, _external=True), 
-                    'is_primary': img.is_primary
-                } for img in product.images]
-            }
-            products_data.append(product_data)
+        products_data = [serialize_product(p) for p in related_products]
         
         response = jsonify({
             'related_products': products_data,
@@ -505,7 +503,7 @@ def get_related_products_simple(product_id):
         return jsonify({'error': f'Error fetching related products: {str(e)}'}), 500
 
 # Get related products by category
-@product_bp.route('/<int:product_id>/related', methods=['GET', 'OPTIONS'])
+@product_bp.route('/product/<product_id>/related', methods=['GET', 'OPTIONS'])
 def get_related_products(product_id):
     """Get related products based on the same category as the given product."""
     print(f"🔍 Related products route called for product_id: {product_id}, method: {request.method}")
@@ -521,69 +519,32 @@ def get_related_products(product_id):
     
     try:
         print(f"🔍 Processing GET request for product_id: {product_id}")
-        # Get the current product to find its category
-        current_product = Product.query.get(product_id)
+        
+        current_product = None
+        if str(product_id).isdigit():
+            current_product = Product.query.get(int(product_id))
+        if not current_product:
+            current_product = Product.query.filter_by(product_slug=product_id).first()
+            
         if not current_product:
             return jsonify({"error": "Product not found"}), 404
         
         # Get related products from the same category (excluding the current product)
         related_products = Product.query.filter(
             Product.category_id == current_product.category_id,
-            Product.product_id != product_id
+            Product.product_id != current_product.product_id
         ).limit(4).all()
         
         # If we don't have enough products in the same category, get some from other categories
         if len(related_products) < 4:
             additional_products = Product.query.filter(
-                Product.product_id != product_id,
+                Product.product_id != current_product.product_id,
                 Product.product_id.notin_([p.product_id for p in related_products])
             ).limit(4 - len(related_products)).all()
             related_products.extend(additional_products)
         
         # Format response
-        products_data = []
-        for product in related_products:
-            # Get primary image
-            primary_image = ProductImage.query.filter_by(
-                product_id=product.product_id, 
-                is_primary=True
-            ).first()
-            
-            # Get category name
-            category_name = None
-            if product.category_id:
-                category = Category.query.get(product.category_id)
-                category_name = category.category_name if category else None
-            
-            product_data = {
-                'product_id': product.product_id,
-                'product_slug': product.product_slug,
-                'product_name': product.product_name,
-                'brand': product.brand,
-                'storefront_category': product.storefront_category,
-                'is_new': product.is_new,
-                'sizes': product.sizes or [],
-                'product_description': product.product_description,
-                'product_price': float(product.product_price),
-
-                'image': product.image,
-
-                'hover_image': product.hover_image,
-
-                'gallery': product.gallery or [],
-
-                'stock_quantity': product.stock_quantity,
-                'category_id': product.category_id,
-                'category_name': category_name,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
-                'primary_image': url_for('static', filename=primary_image.image_url, _external=True) if primary_image else None,
-                'images': [{
-                    'image_id': img.image_id, 
-                    'image_url': url_for('static', filename=img.image_url, _external=True), 
-                    'is_primary': img.is_primary
-                } for img in product.images]
-            }
-            products_data.append(product_data)
+        products_data = [serialize_product(p) for p in related_products]
         
         response = jsonify({
             'related_products': products_data,
@@ -601,37 +562,19 @@ def get_related_products(product_id):
         return jsonify({'error': f'Error fetching related products: {str(e)}'}), 500
 
 # Get a specific product by ID
-@product_bp.route('/<int:product_id>', methods=['GET'])
+@product_bp.route('/product/<product_id>', methods=['GET'])
 def get_product(product_id):
-    """Retrieve a specific product by ID and its images."""
-    
-    product = Product.query.get(product_id)
-    
+    """Retrieve a specific product by ID or Slug and its images."""
+    product = None
+    if str(product_id).isdigit():
+        product = Product.query.get(int(product_id))
+    if not product:
+        product = Product.query.filter_by(product_slug=product_id).first()
+        
     if not product:
         return jsonify({"error": "Product not found"}), 404
 
-    return jsonify({
-        'product_id': product.product_id,
-        'product_name': product.product_name,
-        'product_description': product.product_description,
-        'product_price': float(product.product_price),
-
-        'image': product.image,
-
-        'hover_image': product.hover_image,
-
-        'gallery': product.gallery or [],
-
-        'stock_quantity': product.stock_quantity,
-        'category_id': product.category_id,
-        'images': [
-            {
-                'image_id': img.image_id,
-                'image_url': url_for('static', filename=img.image_url, _external=True),
-                'is_primary': img.is_primary
-            } for img in product.images
-        ]
-    }), 200
+    return jsonify(serialize_product(product)), 200
 
 # Get products by category name/slug
 @product_bp.route('/product/category/<category_slug>', methods=['GET'])
@@ -723,16 +666,22 @@ def get_products_by_category(category_slug):
         return jsonify({'error': f'Error fetching products by category: {str(e)}'}), 500
 
 # Update a product
-@product_bp.route('/<int:product_id>', methods=['PUT'])
+@product_bp.route('/product/<product_id>', methods=['PUT'])
 @jwt_required()
 def update_product(product_id):
     """Update a product's details."""
-    product = Product.query.get_or_404(product_id)
+    product = None
+    if str(product_id).isdigit():
+        product = Product.query.get(int(product_id))
+    if not product:
+        product = Product.query.filter_by(product_slug=product_id).first()
+        
+    if not product:
+        return jsonify({"error": "Product not found"}), 404
     
     # Handle both JSON and FormData
     if request.content_type and request.content_type.startswith('multipart/form-data'):
         data = request.form
-        files = request.files.getlist('images')
         
         # Helper to apply updates
         def apply_updates(source_data):
@@ -744,6 +693,8 @@ def update_product(product_id):
                 product.brand = source_data.get('brand')
             if 'storefront_category' in source_data:
                 product.storefront_category = source_data.get('storefront_category')
+            if 'product_type' in source_data:
+                product.product_type = source_data.get('product_type') or 'shoes'
             if 'is_new' in source_data:
                 val = source_data.get('is_new')
                 product.is_new = str(val).lower() in ['true', '1', 't', 'y', 'yes'] if not isinstance(val, bool) else val
@@ -803,23 +754,6 @@ def update_product(product_id):
                     pass
             else:
                 product.gallery = gallery_val
-        
-        # Process new images if any
-        if files:
-            current_count = ProductImage.query.filter_by(product_id=product_id).count()
-            for idx, img in enumerate(files[:MAX_IMAGES_PER_PRODUCT - current_count]):
-                if img.filename == '':
-                    continue
-                    
-                image_path = save_product_image(img, product_id)
-                if image_path:
-                    is_primary = (idx == 0 and current_count == 0)  # Primary if first image and no existing images
-                    new_image = ProductImage(
-                        image_url=image_path,
-                        is_primary=is_primary,
-                        product_id=product_id
-                    )
-                    db.session.add(new_image)
     else:
         data = request.get_json()
         if 'product_slug' in data:
@@ -849,27 +783,36 @@ def update_product(product_id):
         if 'category_id' in data:
             product.category_id = int(data.get('category_id', product.category_id))
     
+    # Synchronize ProductImage table with direct image columns
+    sync_product_images(product)
+    
     db.session.commit()
     return jsonify({'message': 'Product updated successfully'}), 200
 
 # Delete a product and its images
-@product_bp.route('/<int:product_id>', methods=['DELETE'])
+@product_bp.route('/product/<product_id>', methods=['DELETE'])
 @jwt_required()
 def delete_product(product_id):
     """Delete a product and all its images."""
-    product = Product.query.get_or_404(product_id)
+    product = None
+    if str(product_id).isdigit():
+        product = Product.query.get(int(product_id))
+    if not product:
+        product = Product.query.filter_by(product_slug=product_id).first()
+        
+    if not product:
+        return jsonify({"error": "Product not found"}), 404
 
     # Delete associated images from database
-    images = ProductImage.query.filter_by(product_id=product_id).all()
+    images = ProductImage.query.filter_by(product_id=product.product_id).all()
     for img in images:
-        
         try:
             delete_image_file(img.image_url)
         except Exception as e:
             current_app.logger.error(f"Failed to delete image {img.image_url}: {str(e)}")
 
     # Delete db records
-    ProductImage.query.filter_by(product_id=product_id).delete()
+    ProductImage.query.filter_by(product_id=product.product_id).delete()
     db.session.delete(product)
     db.session.commit()
 
@@ -881,13 +824,20 @@ def delete_product(product_id):
 
 # Upload Multiple product images
 
-@product_bp.route('/<int:product_id>/images', methods=['POST'])
+@product_bp.route('/product/<product_id>/images', methods=['POST'])
 @jwt_required()
 def add_product_images(product_id):
     """Upload multiple images for a product."""
-    product = Product.query.get_or_404(product_id)
+    product = None
+    if str(product_id).isdigit():
+        product = Product.query.get(int(product_id))
+    if not product:
+        product = Product.query.filter_by(product_slug=product_id).first()
+        
+    if not product:
+        return jsonify({"error": "Product not found"}), 404
 
-    current_count = ProductImage.query.filter_by(product_id=product_id).count()
+    current_count = ProductImage.query.filter_by(product_id=product.product_id).count()
     if current_count >= MAX_IMAGES_PER_PRODUCT:
         return jsonify({'error': f'Maximum {MAX_IMAGES_PER_PRODUCT} images per product reached'}), 400
 
@@ -899,9 +849,7 @@ def add_product_images(product_id):
         return jsonify({'error': 'No valid images selected'}), 400
     
     primary_image_id = request.form.get('primary_image_id')
-    new_primary_set =False
-
-    
+    new_primary_set = False
 
     # Process new images
     uploaded_count = 0
@@ -910,7 +858,7 @@ def add_product_images(product_id):
             continue 
 
         # Save image to file and update database record
-        image_path = save_product_image(img, product_id)
+        image_path = save_product_image(img, product.product_id)
         if not image_path:
             continue
 
@@ -924,7 +872,7 @@ def add_product_images(product_id):
         new_image = ProductImage(
             image_url=image_path,
             is_primary=is_primary,
-            product_id=product_id
+            product_id=product.product_id
         )
         db.session.add(new_image)
         uploaded_count += 1
@@ -932,7 +880,7 @@ def add_product_images(product_id):
         # If setting as primary, unset any existing primary
         if is_primary:
             ProductImage.query.filter(
-                ProductImage.product_id == product_id,
+                ProductImage.product_id == product.product_id,
                 ProductImage.is_primary == True
             ).update({'is_primary': False})
             
@@ -940,7 +888,7 @@ def add_product_images(product_id):
     
     return jsonify({
         'message': f'{len(images)} images added to product',
-        'product_id': product_id,
+        'product_id': product.product_id,
         'new_image_count': uploaded_count,
         'total_images': current_count + uploaded_count
     }), 201

@@ -22,6 +22,8 @@ import { compareSizes } from '../utils/catalogFilters.js';
  *   onSortChange: (s: SortBy) => void,
  *   priceLockedSale?: boolean,
  *   brandLocked?: boolean,
+ *   sizeLabel?: string,
+ *   categoryLabel?: string,
  * }} props
  */
 export function Filters({
@@ -33,6 +35,8 @@ export function Filters({
   onSortChange,
   priceLockedSale = false,
   brandLocked = false,
+  sizeLabel = 'Size',
+  categoryLabel = 'Category',
 }) {
   const brandOpts = useMemo(
     () => [...brandsInCatalog].sort((a, b) => a.localeCompare(b)),
@@ -64,7 +68,7 @@ export function Filters({
           </select>
         </Field>
 
-        <Field label="Size">
+        <Field label={sizeLabel}>
           <select
             value={filters.size}
             onChange={(e) =>
@@ -81,7 +85,7 @@ export function Filters({
           </select>
         </Field>
 
-        <Field label="Category">
+        <Field label={categoryLabel}>
           <select
             value={filters.category}
             onChange={(e) =>

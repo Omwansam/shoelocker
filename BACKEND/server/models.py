@@ -185,6 +185,8 @@ class Product(db.Model):
     brand = db.Column(db.String(100))
     # Frontend categories: men / women / kids
     storefront_category = db.Column(db.String(50))
+    # Product department: shoes / apparel / accessories
+    product_type = db.Column(db.String(50), default='shoes', nullable=False, server_default='shoes')
     is_new = db.Column(db.Boolean, default=False, nullable=False)
     sizes = db.Column(db.JSON, default=list)
     product_description = db.Column(db.Text, nullable=False)

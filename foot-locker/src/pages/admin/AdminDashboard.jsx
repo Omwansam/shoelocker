@@ -1,80 +1,188 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  activityFeedSeed,
-  dashboardKpis,
-  getTopProductsByRevenue,
-  mockOrders,
-  revenueSeries14d,
-  sessionsSeries14d,
-} from '../../data/adminMock.js';
 import { formatPrice } from '../../utils/format.js';
 import { SimpleBarChart } from '../../components/admin/SimpleBarChart.jsx';
 import { StatCard } from '../../components/admin/StatCard.jsx';
 import { OrderStatusPill } from '../../components/admin/OrderStatusPill.jsx';
-import { useAdminOrderStatuses } from '../../hooks/useAdminOrderStatuses.js';
-import { useAdminInventory } from '../../hooks/useAdminInventory.js';
-
-function pctDelta(current, prior) {
-  if (prior === 0) return current > 0 ? 100 : 0;
-  return Math.round(((current - prior) / prior) * 1000) / 10;
-}
+import { fetchAdminDashboardOverview, fetchProducts } from '../../utils/api.js';
 
 export function AdminDashboard() {
-  const revDelta = pctDelta(dashboardKpis.revenue7d, dashboardKpis.revenuePrior7d);
-  const ordDelta = pctDelta(dashboardKpis.orders7d, dashboardKpis.ordersPrior7d);
-  const top = getTopProductsByRevenue();
-  const recent = mockOrders.slice(0, 5);
-  const { getStatus } = useAdminOrderStatuses();
-  const { lowStockProducts, getStock } = useAdminInventory();
+  const [data, setData] = useState(null);
+  const [lowStock, setLowStock] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadData() {
+      try {
+        setLoading(true);
+        const [res, products] = await Promise.all([
+          fetchAdminDashboardOverview(),
+          fetchProducts({ throwOnError: true }),
+        ]);
+        if (active && res && res.success) {
+          setData(res.data);
+          setLowStock(
+            products
+              .filter((p) => (p.stock_quantity ?? 0) <= 8)
+              .sort((a, b) => (a.stock_quantity ?? 0) - (b.stock_quantity ?? 0)),
+          );
+        } else if (active) {
+          setError(res?.error || 'Failed to fetch dashboard data');
+        }
+      } catch (err) {
+        if (active) {
+          setError(err.message || 'Failed to fetch dashboard overview');
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadData();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-red border-t-transparent" />
+        <p className="text-sm font-medium text-neutral-600">Loading live operations dashboard...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-brand-red/20 bg-brand-red/5 p-6 text-center animate-fade-rise">
+        <h3 className="text-lg font-semibold text-neutral-900">Dashboard Offline</h3>
+        <p className="mt-2 text-sm text-neutral-600">{error}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-full bg-brand-red px-5 py-2 text-sm font-semibold text-white hover:bg-brand-red-hover"
+        >
+          Retry connection
+        </button>
+      </div>
+    );
+  }
+
+  const getStatByTitle = (title) => data?.stats?.find((s) => s.title === title);
+
+  const revenueFormatted = getStatByTitle('Total Revenue')?.value || 'KSh 0';
+  const avgOrderValueFormatted = getStatByTitle('Avg Order Value')?.value || 'KSh 0';
+  const totalOrders = getStatByTitle('Total Orders')?.value || '0';
+  const activeCustomers = getStatByTitle('Active Customers')?.value || '0';
+
+  const revenueChangeStr = getStatByTitle('Total Revenue')?.change || '0%';
+  const ordersChangeStr = getStatByTitle('Total Orders')?.change || '0%';
+
+  const revenueTrendUp = getStatByTitle('Total Revenue')?.trend === 'up';
+  const ordersTrendUp = getStatByTitle('Total Orders')?.trend === 'up';
+
+  const dynamicRevenueSeries =
+    data?.salesData?.length > 0
+      ? data.salesData.map((d) => ({ label: d.date, value: d.revenue }))
+      : [];
+
+  const dynamicSessionsSeries =
+    data?.salesData?.length > 0
+      ? data.salesData.map((d) => ({ label: d.date, value: d.orders }))
+      : [];
+
+  const transformedRecentOrders =
+    data?.recentOrders?.length > 0
+      ? data.recentOrders.map((o) => {
+          const numericAmount =
+            parseFloat(String(o.amount).replace(/[^0-9.]/g, '')) || 0;
+          const orderNum = String(o.id || '').replace(/\D/g, '') || o.id;
+          return {
+            id: o.id,
+            orderId: orderNum,
+            customer: o.customer,
+            status: o.status,
+            totalKes: numericAmount,
+          };
+        })
+      : [];
+
+  const transformedTopProducts =
+    data?.topProducts?.length > 0
+      ? data.topProducts.map((p) => ({
+          id: p.name,
+          brand: 'ShoeLocker',
+          name: p.name,
+          revenueKes: p.revenue,
+          units: p.sales,
+        }))
+      : [];
+
+  const transformedAlerts =
+    data?.alerts?.length > 0
+      ? data.alerts.map((a, idx) => ({
+          id: `alert-${idx}`,
+          text: a.message,
+          at: new Date(Date.now() - (idx + 1) * 3600000).toISOString(),
+        }))
+      : [];
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 animate-fade-rise">
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-950">Dashboard</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Last 7 days vs prior week — illustrative KPIs tuned for Kenyan Shillings.
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-950">Dashboard</h1>
+          <p className="mt-1 text-sm text-neutral-600">
+            Real-time operations feed connected to SQLite backend.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-600">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          Live Connection
+        </div>
       </div>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Revenue (7d)"
-          value={formatPrice(dashboardKpis.revenue7d)}
+          title="Revenue (30d)"
+          value={revenueFormatted}
           hint="Nationwide storefront + Nairobi DC"
           trend={{
-            label: `${revDelta >= 0 ? '↑' : '↓'} ${Math.abs(revDelta)}% vs prior week`,
-            positive: revDelta >= 0,
+            label: `${revenueTrendUp ? '↑' : '↓'} ${revenueChangeStr.replace(/[+-]/g, '')} vs prior period`,
+            positive: revenueTrendUp,
           }}
         />
         <StatCard
-          title="Orders (7d)"
-          value={`${dashboardKpis.orders7d}`}
+          title="Orders (30d)"
+          value={`${totalOrders}`}
           trend={{
-            label: `${ordDelta >= 0 ? '↑' : '↓'} ${Math.abs(ordDelta)}% vs prior week`,
-            positive: ordDelta >= 0,
+            label: `${ordersTrendUp ? '↑' : '↓'} ${ordersChangeStr.replace(/[+-]/g, '')} vs prior period`,
+            positive: ordersTrendUp,
           }}
         />
         <StatCard
           title="Avg order value"
-          value={formatPrice(dashboardKpis.avgOrderValueKes)}
+          value={avgOrderValueFormatted}
           hint="Excludes cancelled"
         />
         <StatCard
-          title="Dispatch queue"
-          value={`${dashboardKpis.pendingDispatch} orders`}
-          hint={`Median pack time ~${dashboardKpis.fulfilmentSlaHours}h`}
+          title="Active Customers"
+          value={`${activeCustomers}`}
+          hint="Ordering this period"
         />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-neutral-950">
-            Gross sales (14d)
+            Gross sales trend
           </h2>
-          <p className="text-xs text-neutral-500">Kenyan Shillings, nightly close</p>
+          <p className="text-xs text-neutral-500">Kenyan Shillings, daily totals</p>
           <div className="mt-6">
             <SimpleBarChart
-              data={revenueSeries14d}
+              data={dynamicRevenueSeries}
               barClass="bg-neutral-950"
               valuePrefix="KSh "
             />
@@ -82,12 +190,12 @@ export function AdminDashboard() {
         </section>
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-neutral-950">
-            Sessions (14d)
+            Activity / Sessions
           </h2>
-          <p className="text-xs text-neutral-500">Unique browsers, modeled</p>
+          <p className="text-xs text-neutral-500">Daily conversion pipeline visits</p>
           <div className="mt-6">
             <SimpleBarChart
-              data={sessionsSeries14d}
+              data={dynamicSessionsSeries}
               barClass="bg-emerald-600"
               valuePrefix=""
             />
@@ -120,26 +228,34 @@ export function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {recent.map((o) => (
-                  <tr key={o.id}>
-                    <td className="py-3 pr-3 font-medium tabular-nums">
-                      <Link
-                        className="text-neutral-950 hover:text-brand-red hover:underline"
-                        to={`/admin/orders/${o.id}`}
-                      >
-                        {o.id}
-                      </Link>
-                    </td>
-                    <td className="py-3 pr-3 text-neutral-700">{o.customer}</td>
-                    <td className="py-3 pr-3 text-neutral-600">{o.city}</td>
-                    <td className="py-3 pr-3">
-                      <OrderStatusPill status={getStatus(o)} />
-                    </td>
-                    <td className="py-3 text-right font-semibold tabular-nums">
-                      {formatPrice(o.totalKes)}
+                {transformedRecentOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-neutral-500">
+                      No recent orders yet.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  transformedRecentOrders.map((o) => (
+                    <tr key={o.id}>
+                      <td className="py-3 pr-3 font-medium tabular-nums">
+                        <Link
+                          className="text-neutral-950 hover:text-brand-red hover:underline"
+                          to={`/admin/orders/${o.orderId}`}
+                        >
+                          {o.id}
+                        </Link>
+                      </td>
+                      <td className="py-3 pr-3 text-neutral-700">{o.customer}</td>
+                      <td className="py-3 pr-3 text-neutral-600">—</td>
+                      <td className="py-3 pr-3">
+                        <OrderStatusPill status={o.status} />
+                      </td>
+                      <td className="py-3 text-right font-semibold tabular-nums">
+                        {formatPrice(o.totalKes)}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -147,9 +263,9 @@ export function AdminDashboard() {
 
         <section className="h-fit rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-neutral-950">Top SKUs</h2>
-          <p className="text-xs text-neutral-500">By revenue — mock velocity</p>
+          <p className="text-xs text-neutral-500">By revenue — database rank</p>
           <ul className="mt-4 space-y-3">
-            {top.map((p) => (
+            {transformedTopProducts.map((p) => (
               <li key={p.id}>
                 <div className="flex justify-between gap-2 text-sm">
                   <span className="min-w-0 truncate font-medium text-neutral-800">
@@ -159,7 +275,7 @@ export function AdminDashboard() {
                     {formatPrice(p.revenueKes)}
                   </span>
                 </div>
-                <p className="text-xs text-neutral-500">{p.units} units</p>
+                <p className="text-xs text-neutral-500">{p.units} units sold</p>
               </li>
             ))}
           </ul>
@@ -168,10 +284,10 @@ export function AdminDashboard() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-950">Live feed</h2>
-          <p className="text-xs text-neutral-500">Ops-style pulse (static seed)</p>
+          <h2 className="text-lg font-semibold text-neutral-950">Ops Alerts &amp; Activity</h2>
+          <p className="text-xs text-neutral-500">Real-time system health checks</p>
           <ul className="mt-4 space-y-4">
-            {activityFeedSeed.map((a) => (
+            {transformedAlerts.map((a) => (
               <li key={a.id} className="border-l-2 border-brand-red pl-3">
                 <p className="text-sm text-neutral-800">{a.text}</p>
                 <p className="text-[11px] text-neutral-500">
@@ -196,24 +312,24 @@ export function AdminDashboard() {
             </Link>
           </div>
           <p className="text-xs text-neutral-500">
-            SKUs under 8 units (includes your manual adjustments)
+            SKUs under 8 units (includes manual adjustments)
           </p>
-          {lowStockProducts.length === 0 ? (
+          {lowStock.length === 0 ? (
             <p className="mt-6 text-sm text-neutral-600">
               All tracked SKUs are above the danger line.
             </p>
           ) : (
             <ul className="mt-4 space-y-3">
-              {lowStockProducts.slice(0, 6).map((p) => (
+              {lowStock.slice(0, 6).map((p) => (
                 <li key={p.id}>
                   <Link
-                    to="/admin/products"
+                    to={`/admin/products/${p.product_id}/edit`}
                     className="text-sm font-medium text-neutral-900 hover:text-brand-red"
                   >
                     {p.brand} — {p.name}
                   </Link>
                   <p className="text-xs text-amber-800">
-                    {getStock(p.id)} units on hand
+                    {p.stock_quantity ?? 0} units on hand
                   </p>
                 </li>
               ))}
@@ -224,3 +340,4 @@ export function AdminDashboard() {
     </div>
   );
 }
+

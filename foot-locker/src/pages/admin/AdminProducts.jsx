@@ -4,12 +4,14 @@ import { formatPrice } from '../../utils/format.js';
 import { useAdminProductAPI } from '../../hooks/useAdminProductAPI.js';
 
 /** @typedef {'all' | 'men' | 'women' | 'kids'} CatFilter */
+/** @typedef {'all' | 'shoes' | 'apparel' | 'accessories'} TypeFilter */
 
 export function AdminProducts() {
   const { fetchProducts, deleteProduct, loading: apiLoading } = useAdminProductAPI();
   const [products, setProducts] = useState([]);
   const [q, setQ] = useState('');
   const [cat, setCat] = useState(/** @type {CatFilter} */ ('all'));
+  const [typeFilter, setTypeFilter] = useState(/** @type {TypeFilter} */ ('all'));
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const loadProducts = async () => {
@@ -32,6 +34,7 @@ export function AdminProducts() {
     return products.filter((p) => {
       if (!p) return false;
       if (cat !== 'all' && p.category !== cat) return false;
+      if (typeFilter !== 'all' && (p.productType || 'shoes') !== typeFilter) return false;
       if (!needle) return true;
       return (
         p.name?.toLowerCase().includes(needle) ||
@@ -39,7 +42,7 @@ export function AdminProducts() {
         String(p.id).toLowerCase().includes(needle)
       );
     });
-  }, [products, q, cat]);
+  }, [products, q, cat, typeFilter]);
 
   async function handleDelete(id) {
     if (!window.confirm(`Permanently remove product "${id}"?`)) return;
@@ -88,7 +91,7 @@ export function AdminProducts() {
         </div>
         <div>
           <label className="text-xs font-semibold uppercase text-neutral-500">
-            Category
+            Gender
           </label>
           <select
             value={cat}
@@ -99,6 +102,21 @@ export function AdminProducts() {
             <option value="men">Men</option>
             <option value="women">Women</option>
             <option value="kids">Kids</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase text-neutral-500">
+            Type
+          </label>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="mt-2 block w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-red/25 sm:w-44"
+          >
+            <option value="all">All types</option>
+            <option value="shoes">Shoes</option>
+            <option value="apparel">Apparel</option>
+            <option value="accessories">Accessories</option>
           </select>
         </div>
       </div>

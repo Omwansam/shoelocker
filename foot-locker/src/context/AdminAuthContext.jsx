@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { AdminAuthContext } from './adminAuthContext.js';
-import { loginRequest } from '../utils/authApi.js';
+import { loginRequest, clearAuthStorage } from '../utils/authApi.js';
 
 /**
  * @typedef {{
@@ -17,7 +17,26 @@ import { loginRequest } from '../utils/authApi.js';
 
 /** @param {{ children: import('react').ReactNode }} props */
 export function AdminAuthProvider({ children }) {
-  const [session, setSession] = useState(/** @type {AdminSession | null} */ (null));
+  const [session, setSession] = useState(/** @type {AdminSession | null} */ (() => {
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    if (token && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        const role = String(user?.role || '').toLowerCase();
+        const isAdmin = Boolean(user?.is_admin) || role === 'admin' || role === 'manager';
+        if (isAdmin) {
+          return {
+            email: user.email || 'admin@shoelocker.ke',
+            signedInAt: Date.now(),
+          };
+        }
+      } catch (e) {
+        console.error('Failed to restore admin session:', e);
+      }
+    }
+    return null;
+  }));
 
   const login = useCallback(async (email, password) => {
     try {
@@ -40,8 +59,10 @@ export function AdminAuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    clearAuthStorage();
     setSession(null);
   }, []);
+
 
   const value = useMemo(
     () =>

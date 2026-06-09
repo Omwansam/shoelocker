@@ -243,6 +243,138 @@ SEED_PRODUCTS = [
   },
 ]
 
+SEED_APPAREL = [
+  {
+    "id": "nk-tech-fleece-hoodie",
+    "name": "Tech Fleece Full-Zip Hoodie",
+    "brand": "Nike",
+    "price": 12499,
+    "category": "men",
+    "product_type": "apparel",
+    "isNew": True,
+    "sizes": ["S", "M", "L", "XL", "XXL"],
+    "description": "Premium fleece with a streamlined fit — warm enough for Nairobi evenings, light enough to layer.",
+    "image": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1578587018453-892b-f19d874cef4?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1578587018453-892b-f19d874cef4?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+  {
+    "id": "ad-essentials-tee",
+    "name": "Essentials 3-Stripes Tee",
+    "brand": "adidas",
+    "price": 4499,
+    "category": "men",
+    "product_type": "apparel",
+    "isNew": False,
+    "sizes": ["S", "M", "L", "XL"],
+    "description": "Soft cotton jersey with signature 3-Stripes — a daily rotation staple.",
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1583743814966-6a5ac098195a?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+  {
+    "id": "nk-dri-fit-shorts",
+    "name": "Dri-FIT Challenger Shorts",
+    "brand": "Nike",
+    "price": 5499,
+    "category": "men",
+    "product_type": "apparel",
+    "isNew": True,
+    "sizes": ["S", "M", "L", "XL"],
+    "description": "Sweat-wicking woven fabric with built-in brief — built for track days and weekend runs.",
+    "image": "https://images.unsplash.com/photo-1591195853828-11db59a44f6b?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1596755094514-f87e34085b56?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1591195853828-11db59a44f6b?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+  {
+    "id": "nk-sportswear-jacket",
+    "name": "Sportswear Windrunner Jacket",
+    "brand": "Nike",
+    "price": 14999,
+    "category": "women",
+    "product_type": "apparel",
+    "isNew": True,
+    "sizes": ["XS", "S", "M", "L", "XL"],
+    "description": "Heritage chevron design with lightweight taffeta — packable weather protection.",
+    "image": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1544022613-e87ca75a784a?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+  {
+    "id": "ad-crop-hoodie",
+    "name": "Essentials Fleece Crop Hoodie",
+    "brand": "adidas",
+    "price": 8999,
+    "category": "women",
+    "product_type": "apparel",
+    "isNew": False,
+    "sizes": ["XS", "S", "M", "L"],
+    "description": "Relaxed crop silhouette in plush fleece — pairs with high-rise joggers or bike shorts.",
+    "image": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+  {
+    "id": "pm-essentials-joggers",
+    "name": "Essentials Open-Hem Joggers",
+    "brand": "Puma",
+    "price": 6999,
+    "category": "women",
+    "product_type": "apparel",
+    "isNew": False,
+    "sizes": ["XS", "S", "M", "L", "XL"],
+    "description": "Tapered fit with ribbed cuffs and side pockets — lounge-to-street versatility.",
+    "image": "https://images.unsplash.com/photo-1506629082955-511b1aa562c8?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1506629082955-511b1aa562c8?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+  {
+    "id": "nk-kids-fleece-set",
+    "name": "Kids' Therma-FIT Fleece Set",
+    "brand": "Nike",
+    "price": 7999,
+    "category": "kids",
+    "product_type": "apparel",
+    "isNew": True,
+    "sizes": ["XS", "S", "M", "L", "XL"],
+    "description": "Matching hoodie and joggers in soft fleece — playground-ready warmth.",
+    "image": "https://images.unsplash.com/photo-1519238263530-95a2d4a217d2?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1519238263530-95a2d4a217d2?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+  {
+    "id": "ad-kids-3s-tee",
+    "name": "Kids' 3-Stripes T-Shirt",
+    "brand": "adidas",
+    "price": 2999,
+    "category": "kids",
+    "product_type": "apparel",
+    "isNew": False,
+    "sizes": ["XS", "S", "M", "L"],
+    "description": "Breathable cotton tee with bold 3-Stripes — easy wash, everyday wear.",
+    "image": "https://images.unsplash.com/photo-1503341451609-6a6d5d8f2e24?auto=format&fit=crop&w=900&q=80",
+    "hoverImage": "https://images.unsplash.com/photo-1519238263530-95a2d4a217d2?auto=format&fit=crop&w=900&q=80",
+    "gallery": [
+      "https://images.unsplash.com/photo-1503341451609-6a6d5d8f2e24?auto=format&fit=crop&w=1200&q=80",
+    ],
+  },
+]
+
 def seed_products():
     """Seed categories and products if they don't already exist."""
     print("Starting product seed process...")
@@ -264,7 +396,8 @@ def seed_products():
 
     # 2. Add products
     added_count = 0
-    for p_data in SEED_PRODUCTS:
+    all_products = SEED_PRODUCTS + SEED_APPAREL
+    for p_data in all_products:
         # Check if product exists by slug
         existing = Product.query.filter_by(product_slug=p_data['id']).first()
         if existing:
@@ -275,6 +408,7 @@ def seed_products():
             product_name=p_data['name'],
             brand=p_data['brand'],
             storefront_category=p_data['category'],
+            product_type=p_data.get('product_type', 'shoes'),
             product_price=float(p_data['price']),
             is_new=p_data['isNew'],
             sizes=p_data['sizes'],

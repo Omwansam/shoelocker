@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory, make_response, jsonify
+from flask import Flask, send_from_directory, make_response, jsonify, request
 from config import Config
 from extensions import db, migrate, jwt
 from flask_cors import CORS
@@ -34,7 +34,16 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 CORS(
-    app
+    app,
+    resources={
+        r"/*": {
+            "origins": ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "Accept"],
+            "supports_credentials": True,
+            "max_age": 3600
+        }
+    }
 )
 db.init_app(app)
 migrate.init_app(app, db)
@@ -49,14 +58,24 @@ def expired_token_callback(jwt_header, jwt_payload):
 
 @jwt.invalid_token_loader
 def invalid_token_callback(error):
+    print('[JWT] invalid_token_callback called', {
+        'error': error,
+        'authorization': request.headers.get('Authorization')
+    })
     response = jsonify({"error": "Invalid token"})
     response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     return response, 401
 
 @jwt.unauthorized_loader
 def missing_token_callback(error):
+    print('[JWT] missing_token_callback called', {
+        'error': error,
+        'authorization': request.headers.get('Authorization')
+    })
     response = jsonify({"error": "Authorization token is required"})
     response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     return response, 401
 
 @jwt.needs_fresh_token_loader
@@ -80,12 +99,13 @@ def serve_upload(filename):
     return send_from_directory('static/uploads', filename)
 
   
+@app.after_request
+def apply_cors_headers(response):
+    response.headers.setdefault('Access-Control-Allow-Origin', '*')
+    response.headers.setdefault('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept')
+    response.headers.setdefault('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    return response
 
-#Register all blueprints
-
-app.register_blueprint(users_bp,url_prefix = '/auth')
-app.register_blueprint(product_image_bp,url_prefix = '/productimages')
-app.register_blueprint(product_bp,url_prefix = '/api')
 app.register_blueprint(billing_bp, url_prefix = '/billing')
 app.register_blueprint(category_bp,url_prefix = '/categories')
 app.register_blueprint(analytics_bp, url_prefix = '/analytics')
@@ -111,6 +131,11 @@ app.register_blueprint(settings_bp, url_prefix = '/settings')
 # Register shipping blueprint (prefix defined inside shipping blueprint)
 app.register_blueprint(shipping_bp)
 app.register_blueprint(wishlist_bp, url_prefix='/wishlist')
+
+# Register auth, products, and product images blueprints
+app.register_blueprint(users_bp, url_prefix='/auth')
+app.register_blueprint(product_bp, url_prefix='/api')
+app.register_blueprint(product_image_bp, url_prefix='/productimages')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

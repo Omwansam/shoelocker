@@ -1,5 +1,8 @@
 # Fix: ModuleNotFoundError: No module named '_sqlite3'
 
+fuser -k 5000/tcp
+
+
 Your Python 3.8.20 (pyenv) was built **without SQLite support** because the SQLite development libraries were missing during compilation.
 
 ## Steps to Fix

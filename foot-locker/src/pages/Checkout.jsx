@@ -5,7 +5,8 @@ import { useCart } from '../hooks/useCart.js';
 import { useToast } from '../hooks/useToast.js';
 import { COUNTRY } from '../config/market.js';
 import { formatPrice } from '../utils/format.js';
-import { appendOrderToHistory } from '../utils/ordersHistory.js';
+import { isLoggedIn } from '../utils/auth.js';
+import { checkoutOrder, validateCoupon } from '../utils/api.js';
 
 export function Checkout() {
   const navigate = useNavigate();
@@ -14,32 +15,74 @@ export function Checkout() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [couponApplied, setCouponApplied] = useState(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [placed, setPlaced] = useState(false);
   const [lastOrderId, setLastOrderId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleSubmit(e) {
+  async function handleApplyCoupon() {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    setValidatingCoupon(true);
+    setError('');
+    try {
+      const res = await validateCoupon(code);
+      if (!res.valid) {
+        setCouponApplied(null);
+        setError(res.message || 'Invalid coupon code');
+        return;
+      }
+      setCouponApplied(res);
+      show(`Coupon ${code} applied`, 'success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not validate coupon');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!items.length) return;
-    const lines = items.map((line) => ({
-      productId: line.productId,
-      name: line.snapshot.name,
-      brand: line.snapshot.brand,
-      size: line.size,
-      qty: line.qty,
-      lineTotalKes: line.snapshot.price * line.qty,
-    }));
-    const id = appendOrderToHistory({
-      customerName: name,
-      phone,
-      address,
-      subtotalKes: subtotal,
-      lines,
-    });
-    setLastOrderId(id);
-    setPlaced(true);
-    clearCart();
-    show(`Order confirmed — ${id}. Saved under My orders.`, 'success');
-    setTimeout(() => navigate('/'), 2200);
+
+    if (!isLoggedIn()) {
+      show('Sign in to complete checkout', 'error');
+      navigate('/sign-in', { state: { from: '/checkout' } });
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+    try {
+      const shippingAddress = [name, phone, address].filter(Boolean).join(' · ');
+      const payload = {
+        shipping_address: shippingAddress,
+        payment_method: 'pay_on_delivery',
+      };
+      if (couponApplied?.code) {
+        payload.coupon_code = couponApplied.code;
+      } else if (couponCode.trim()) {
+        payload.coupon_code = couponCode.trim().toUpperCase();
+      }
+
+      const result = await checkoutOrder(payload);
+      const id = result.order_id
+        ? `ORD-${String(result.order_id).padStart(3, '0')}`
+        : 'confirmed';
+      setLastOrderId(id);
+      setPlaced(true);
+      clearCart();
+      show(`Order confirmed — ${id}`, 'success');
+      setTimeout(() => navigate('/account/orders'), 2200);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Checkout failed');
+      show('Checkout failed — please try again', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (items.length === 0 && !placed) {
@@ -95,7 +138,7 @@ export function Checkout() {
             <Link to="/account/orders" className="font-semibold text-brand-red hover:underline">
               My orders
             </Link>
-            . Demo routes home in a moment.
+            .
           </p>
         </div>
       </div>
@@ -108,9 +151,21 @@ export function Checkout() {
         Checkout
       </h1>
       <p className="mt-2 text-neutral-600">
-        Pay on delivery &amp; M-Pesa integrations ship next — this form captures
-        your Kenya delivery details in KSh.
+        Pay on delivery — your cart is saved to your account.
       </p>
+
+      {!isLoggedIn() ? (
+        <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Link to="/sign-in" className="font-semibold text-brand-red hover:underline">
+            Sign in
+          </Link>{' '}
+          or create an account to place your order.
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      ) : null}
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[1fr,320px]">
         <form
@@ -118,10 +173,7 @@ export function Checkout() {
           className="space-y-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
         >
           <div>
-            <label
-              htmlFor="co-name"
-              className="text-xs font-semibold uppercase tracking-wider text-neutral-500"
-            >
+            <label htmlFor="co-name" className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
               Full name
             </label>
             <input
@@ -135,10 +187,7 @@ export function Checkout() {
             />
           </div>
           <div>
-            <label
-              htmlFor="co-address"
-              className="text-xs font-semibold uppercase tracking-wider text-neutral-500"
-            >
+            <label htmlFor="co-address" className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
               Delivery address ({COUNTRY})
             </label>
             <textarea
@@ -154,10 +203,7 @@ export function Checkout() {
             />
           </div>
           <div>
-            <label
-              htmlFor="co-phone"
-              className="text-xs font-semibold uppercase tracking-wider text-neutral-500"
-            >
+            <label htmlFor="co-phone" className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
               Phone (Safaricom / Airtel)
             </label>
             <input
@@ -172,11 +218,42 @@ export function Checkout() {
               className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-3 text-sm shadow-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10"
             />
           </div>
+          <div>
+            <label htmlFor="co-coupon" className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+              Promo code
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input
+                id="co-coupon"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                placeholder="MADARAKA"
+                className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-3 py-3 text-sm uppercase shadow-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10"
+              />
+              <button
+                type="button"
+                onClick={handleApplyCoupon}
+                disabled={validatingCoupon || !couponCode.trim()}
+                className="shrink-0 rounded-full border border-neutral-200 px-4 text-sm font-semibold hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {validatingCoupon ? '…' : 'Apply'}
+              </button>
+            </div>
+            {couponApplied ? (
+              <p className="mt-2 text-xs font-medium text-emerald-700">
+                {couponApplied.code} applied —{' '}
+                {String(couponApplied.discount_type).toLowerCase().includes('percent')
+                  ? `${couponApplied.discount_value}% off`
+                  : `${formatPrice(Number(couponApplied.discount_value))} off`}
+              </p>
+            ) : null}
+          </div>
           <button
             type="submit"
-            className="h-12 w-full rounded-full bg-black text-sm font-semibold text-white transition hover:bg-neutral-900"
+            disabled={submitting || !isLoggedIn()}
+            className="h-12 w-full rounded-full bg-black text-sm font-semibold text-white transition hover:bg-neutral-900 disabled:opacity-50"
           >
-            Place order
+            {submitting ? 'Placing order…' : 'Place order'}
           </button>
         </form>
 
@@ -200,10 +277,6 @@ export function Checkout() {
               <span>{formatPrice(subtotal)}</span>
             </div>
           </div>
-          <p className="mt-4 text-xs text-neutral-500">
-            16% VAT and courier tariffs will itemise here once live quoting is
-            wired — subtotal stays in KSh as shown.
-          </p>
           <Link
             to="/cart"
             className="mt-4 inline-flex text-sm font-semibold text-brand-red hover:underline"

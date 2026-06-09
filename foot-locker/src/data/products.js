@@ -271,6 +271,97 @@ export const products = [
       'https://images.unsplash.com/photo-1515955656352-a1dc3cc67a96?auto=format&fit=crop&w=1200&q=80',
     ],
   },
+  {
+    id: 'nk-tech-fleece-hoodie',
+    name: 'Tech Fleece Full-Zip Hoodie',
+    brand: 'Nike',
+    price: 12499,
+    category: 'men',
+    productType: 'apparel',
+    isNew: true,
+    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+    description:
+      'Premium fleece with a streamlined fit — warm enough for Nairobi evenings, light enough to layer.',
+    image:
+      'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80',
+    hoverImage:
+      'https://images.unsplash.com/photo-1578587018453-892b-f19d874cef4?auto=format&fit=crop&w=900&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80',
+    ],
+  },
+  {
+    id: 'ad-essentials-tee',
+    name: 'Essentials 3-Stripes Tee',
+    brand: 'adidas',
+    price: 4499,
+    category: 'men',
+    productType: 'apparel',
+    isNew: false,
+    sizes: ['S', 'M', 'L', 'XL'],
+    description: 'Soft cotton jersey with signature 3-Stripes — a daily rotation staple.',
+    image:
+      'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80',
+    hoverImage:
+      'https://images.unsplash.com/photo-1583743814966-6a5ac098195a?auto=format&fit=crop&w=900&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80',
+    ],
+  },
+  {
+    id: 'nk-sportswear-jacket',
+    name: 'Sportswear Windrunner Jacket',
+    brand: 'Nike',
+    price: 14999,
+    category: 'women',
+    productType: 'apparel',
+    isNew: true,
+    sizes: ['XS', 'S', 'M', 'L', 'XL'],
+    description: 'Heritage chevron design with lightweight taffeta — packable weather protection.',
+    image:
+      'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=900&q=80',
+    hoverImage:
+      'https://images.unsplash.com/photo-1544022613-e87ca75a784a?auto=format&fit=crop&w=900&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=1200&q=80',
+    ],
+  },
+  {
+    id: 'ad-crop-hoodie',
+    name: 'Essentials Fleece Crop Hoodie',
+    brand: 'adidas',
+    price: 8999,
+    category: 'women',
+    productType: 'apparel',
+    isNew: false,
+    sizes: ['XS', 'S', 'M', 'L'],
+    description: 'Relaxed crop silhouette in plush fleece — pairs with high-rise joggers or bike shorts.',
+    image:
+      'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=80',
+    hoverImage:
+      'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?auto=format&fit=crop&w=900&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80',
+    ],
+  },
+  {
+    id: 'nk-kids-fleece-set',
+    name: "Kids' Therma-FIT Fleece Set",
+    brand: 'Nike',
+    price: 7999,
+    category: 'kids',
+    productType: 'apparel',
+    isNew: true,
+    sizes: ['XS', 'S', 'M', 'L', 'XL'],
+    description: 'Matching hoodie and joggers in soft fleece — playground-ready warmth.',
+    image:
+      'https://images.unsplash.com/photo-1519238263530-95a2d4a217d2?auto=format&fit=crop&w=900&q=80',
+    hoverImage:
+      'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=900&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1519238263530-95a2d4a217d2?auto=format&fit=crop&w=1200&q=80',
+    ],
+  },
 ];
 
 export function getProductById(id) {
