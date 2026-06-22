@@ -4,11 +4,8 @@ export const MARKET_LOCALE = 'en-KE';
 export const CURRENCY_CODE = 'KES';
 export const COUNTRY = 'Kenya';
 
-/** Nationwide free-delivery threshold (Kenyan Shillings) */
+/** Nationwide free-delivery threshold (Kenyan Shillings) — fallback; live value from admin settings */
 export const FREE_SHIPPING_MIN_KES = 12000;
-
-/** PDP / promos — free shipping wording */
-export const FREE_SHIPPING_PDP_KES = 14500;
 
 /** Sale wall: styles at or below this KES total */
 export const SALE_MAX_KES = 22000;

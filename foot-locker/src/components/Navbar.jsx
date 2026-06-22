@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth.js';
+import { useStoreSettings } from '../hooks/useStoreSettings.js';
 import { useCart } from '../hooks/useCart.js';
 import { useWishlist } from '../hooks/useWishlist.js';
 import { REWARDS_PROGRAM } from '../config/brand.js';
-import { FREE_SHIPPING_MIN_KES } from '../config/market.js';
+import { formatPrice } from '../utils/format.js';
 import { LogoMark } from './LogoMark.jsx';
 import { MegaPanel } from './MegaNav.jsx';
 
@@ -14,6 +16,8 @@ import { MegaPanel } from './MegaNav.jsx';
 export function Navbar() {
   const { itemCount, openDrawer, drawerOpen } = useCart();
   const { count: wishlistCount } = useWishlist();
+  const { isLoggedIn, logout } = useAuth();
+  const { settings } = useStoreSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mega, setMega] = useState(/** @type {MegaActive} */ (null));
   const closeTimer = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
@@ -58,8 +62,8 @@ export function Navbar() {
           <p className="uppercase tracking-wider text-neutral-300">
             <span className="font-semibold text-brand-red">Free delivery</span>
             {' '}
-            on orders over KSh {FREE_SHIPPING_MIN_KES.toLocaleString('en-KE')} —
-            Kenya nationwide
+            on orders over {formatPrice(settings.free_shipping_threshold)} —
+            {settings.country} nationwide
           </p>
           <div className="flex flex-wrap gap-x-4 gap-y-1 sm:items-center">
             <Link to="/stores" className="transition hover:text-white">
@@ -68,9 +72,15 @@ export function Navbar() {
             <span className="hidden text-neutral-600 sm:inline" aria-hidden>
               |
             </span>
-            <Link to="/sign-in" className="transition hover:text-white">
-              Sign in
-            </Link>
+            {isLoggedIn ? (
+              <Link to="/account" className="transition hover:text-white">
+                My account
+              </Link>
+            ) : (
+              <Link to="/sign-in" className="transition hover:text-white">
+                Sign in
+              </Link>
+            )}
             <span className="hidden text-neutral-600 sm:inline" aria-hidden>
               |
             </span>
@@ -85,15 +95,29 @@ export function Navbar() {
             <span className="hidden text-neutral-600 sm:inline" aria-hidden>
               |
             </span>
-            <Link to="/account/orders" className="transition hover:text-white">
-              My orders
-            </Link>
-            <span className="hidden text-neutral-600 sm:inline" aria-hidden>
-              |
-            </span>
-            <Link to="/admin/login" className="transition hover:text-white">
-              Admin
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <span className="hidden text-neutral-600 sm:inline" aria-hidden>
+                  |
+                </span>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="transition hover:text-white"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="hidden text-neutral-600 sm:inline" aria-hidden>
+                  |
+                </span>
+                <Link to="/account" className="transition hover:text-white">
+                  Account
+                </Link>
+              </>
+            )}
             <span className="text-neutral-600" aria-hidden>
               |
             </span>
@@ -422,12 +446,24 @@ export function Navbar() {
               Stores
             </NavLink>
             <Link
-              to="/sign-in"
+              to={isLoggedIn ? '/account' : '/sign-in'}
               className="block rounded-lg px-3 py-3 font-bold uppercase"
               onClick={() => setMobileOpen(false)}
             >
-              Sign in
+              {isLoggedIn ? 'My account' : 'Sign in'}
             </Link>
+            {isLoggedIn ? (
+              <button
+                type="button"
+                className="block w-full rounded-lg px-3 py-3 text-left font-bold uppercase"
+                onClick={() => {
+                  setMobileOpen(false);
+                  logout();
+                }}
+              >
+                Sign out
+              </button>
+            ) : null}
             <Link
               to="/search"
               className="block rounded-lg px-3 py-3 font-bold uppercase"
@@ -442,20 +478,6 @@ export function Navbar() {
             >
               Wishlist
               {wishlistCount > 0 ? ` (${wishlistCount})` : ''}
-            </Link>
-            <Link
-              to="/account/orders"
-              className="block rounded-lg px-3 py-3 font-bold uppercase"
-              onClick={() => setMobileOpen(false)}
-            >
-              My orders
-            </Link>
-            <Link
-              to="/admin/login"
-              className="block rounded-lg px-3 py-3 font-bold uppercase"
-              onClick={() => setMobileOpen(false)}
-            >
-              Admin
             </Link>
             <Link
               to="/rewards"

@@ -27,6 +27,11 @@ PY
 echo "Running database migrations..."
 flask db upgrade
 
+echo "Seeding catalog and demo analytics data (if needed)..."
+python seed_products.py 2>/dev/null || true
+python seed_admin.py 2>/dev/null || true
+python seed_demo_data.py 2>/dev/null || true
+
 echo "Starting Gunicorn..."
 exec gunicorn \
   --bind 0.0.0.0:5000 \

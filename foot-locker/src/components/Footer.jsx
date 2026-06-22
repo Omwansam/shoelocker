@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../hooks/useToast.js';
-import { persistNewsletterSignup } from '../utils/newsletterStorage.js';
+import { useStoreSettings } from '../hooks/useStoreSettings.js';
+import { subscribeNewsletter } from '../utils/api.js';
 import {
   COMPANY_NAME,
   REWARDS_PROGRAM,
-  SUPPORT_EMAIL,
 } from '../config/brand.js';
 import { LogoMark } from './LogoMark.jsx';
 
@@ -78,29 +78,20 @@ const footCol = /** @type {const} */ ([
 
 export function Footer() {
   const { show } = useToast();
+  const { settings } = useStoreSettings();
   const [email, setEmail] = useState('');
 
-  function onNewsletterSubmit(e) {
+  async function onNewsletterSubmit(e) {
     e.preventDefault();
     const v = email.trim();
     if (!v) return;
-    const result = persistNewsletterSignup(v);
-    if (!result.ok) {
-      show(result.error, 'error');
-      return;
+    try {
+      const result = await subscribeNewsletter(v);
+      show(result.message || `Subscribed — we'll email ${v} with Kenya drops.`, 'success');
+      setEmail('');
+    } catch (err) {
+      show(err instanceof Error ? err.message : 'Could not subscribe', 'error');
     }
-    if (result.already) {
-      show(
-        `${result.email} is already subscribed — you're still on the list for Kenya drops.`,
-        'info',
-      );
-    } else {
-      show(
-        `Saved locally — we'll email ${result.email} when campaigns go live (demo storage).`,
-        'success',
-      );
-    }
-    setEmail('');
   }
 
   return (
@@ -157,10 +148,10 @@ export function Footer() {
             </p>
             <p className="mt-3 text-sm">
               <a
-                href={`mailto:${SUPPORT_EMAIL}`}
+                href={`mailto:${settings.support_email}`}
                 className="font-semibold text-brand-red hover:underline"
               >
-                {SUPPORT_EMAIL}
+                {settings.support_email}
               </a>
             </p>
             <div className="mt-5 flex gap-3">

@@ -6,8 +6,8 @@ export function RequireAdmin() {
   const location = useLocation();
 
   if (!session) {
-    const to = `/admin/login?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
-    return <Navigate to={to} replace />;
+    const from = `${location.pathname}${location.search}`;
+    return <Navigate to="/sign-in" state={{ from }} replace />;
   }
 
   return <Outlet />;

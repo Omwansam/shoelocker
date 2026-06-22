@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatPrice } from '../../utils/format.js';
 import { SimpleBarChart } from '../../components/admin/SimpleBarChart.jsx';
+import { SimpleDonut } from '../../components/admin/SimpleDonut.jsx';
 import { StatCard } from '../../components/admin/StatCard.jsx';
 import { OrderStatusPill } from '../../components/admin/OrderStatusPill.jsx';
+import { AdminPage } from '../../components/admin/ui/AdminPage.jsx';
+import { AdminPageHeader } from '../../components/admin/ui/AdminPageHeader.jsx';
+import { AdminCard } from '../../components/admin/ui/AdminCard.jsx';
+import { AdminButton } from '../../components/admin/ui/AdminButton.jsx';
+import { AdminLoading } from '../../components/admin/ui/AdminLoading.jsx';
+import { AdminTable, AdminTableHead, AdminTableBody, AdminTh, AdminTd } from '../../components/admin/ui/AdminTable.jsx';
 import { fetchAdminDashboardOverview, fetchProducts } from '../../utils/api.js';
 
 export function AdminDashboard() {
@@ -32,9 +39,7 @@ export function AdminDashboard() {
           setError(res?.error || 'Failed to fetch dashboard data');
         }
       } catch (err) {
-        if (active) {
-          setError(err.message || 'Failed to fetch dashboard overview');
-        }
+        if (active) setError(err.message || 'Failed to fetch dashboard overview');
       } finally {
         if (active) setLoading(false);
       }
@@ -45,41 +50,31 @@ export function AdminDashboard() {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-red border-t-transparent" />
-        <p className="text-sm font-medium text-neutral-600">Loading live operations dashboard...</p>
-      </div>
-    );
-  }
+  if (loading) return <AdminLoading label="Loading operations dashboard…" />;
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-brand-red/20 bg-brand-red/5 p-6 text-center animate-fade-rise">
-        <h3 className="text-lg font-semibold text-neutral-900">Dashboard Offline</h3>
-        <p className="mt-2 text-sm text-neutral-600">{error}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-4 rounded-full bg-brand-red px-5 py-2 text-sm font-semibold text-white hover:bg-brand-red-hover"
-        >
-          Retry connection
-        </button>
-      </div>
+      <AdminPage>
+        <AdminCard>
+          <div className="py-8 text-center">
+            <h3 className="text-lg font-semibold text-neutral-900">Dashboard unavailable</h3>
+            <p className="mt-2 text-sm text-neutral-600">{error}</p>
+            <AdminButton variant="primary" className="mt-5" onClick={() => window.location.reload()}>
+              Retry connection
+            </AdminButton>
+          </div>
+        </AdminCard>
+      </AdminPage>
     );
   }
 
   const getStatByTitle = (title) => data?.stats?.find((s) => s.title === title);
-
   const revenueFormatted = getStatByTitle('Total Revenue')?.value || 'KSh 0';
   const avgOrderValueFormatted = getStatByTitle('Avg Order Value')?.value || 'KSh 0';
   const totalOrders = getStatByTitle('Total Orders')?.value || '0';
   const activeCustomers = getStatByTitle('Active Customers')?.value || '0';
-
   const revenueChangeStr = getStatByTitle('Total Revenue')?.change || '0%';
   const ordersChangeStr = getStatByTitle('Total Orders')?.change || '0%';
-
   const revenueTrendUp = getStatByTitle('Total Revenue')?.trend === 'up';
   const ordersTrendUp = getStatByTitle('Total Orders')?.trend === 'up';
 
@@ -87,7 +82,6 @@ export function AdminDashboard() {
     data?.salesData?.length > 0
       ? data.salesData.map((d) => ({ label: d.date, value: d.revenue }))
       : [];
-
   const dynamicSessionsSeries =
     data?.salesData?.length > 0
       ? data.salesData.map((d) => ({ label: d.date, value: d.orders }))
@@ -96,16 +90,9 @@ export function AdminDashboard() {
   const transformedRecentOrders =
     data?.recentOrders?.length > 0
       ? data.recentOrders.map((o) => {
-          const numericAmount =
-            parseFloat(String(o.amount).replace(/[^0-9.]/g, '')) || 0;
+          const numericAmount = parseFloat(String(o.amount).replace(/[^0-9.]/g, '')) || 0;
           const orderNum = String(o.id || '').replace(/\D/g, '') || o.id;
-          return {
-            id: o.id,
-            orderId: orderNum,
-            customer: o.customer,
-            status: o.status,
-            totalKes: numericAmount,
-          };
+          return { id: o.id, orderId: orderNum, customer: o.customer, status: o.status, totalKes: numericAmount };
         })
       : [];
 
@@ -129,215 +116,220 @@ export function AdminDashboard() {
         }))
       : [];
 
+  const categoryData = data?.categoryData || [];
+  const regionalData = data?.regionalData || [];
+  const totalCategoryRevenue = categoryData.reduce((s, c) => s + (c.sales || 0), 0) || 1;
+  const donutColors = ['#e60012', '#171717', '#059669', '#0284c7', '#a16207'];
+  const donutSegments = categoryData.slice(0, 5).map((c, i) => ({
+    label: c.name,
+    pct: Math.round(((c.sales || 0) / totalCategoryRevenue) * 100),
+    color: donutColors[i % donutColors.length],
+  }));
+
   return (
-    <div className="mx-auto max-w-6xl space-y-8 animate-fade-rise">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-950">Dashboard</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Real-time operations feed connected to SQLite backend.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-600">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          Live Connection
-        </div>
-      </div>
+    <AdminPage className="space-y-8">
+      <AdminPageHeader
+        title="Dashboard"
+        description="Live revenue, orders, and inventory health across your Kenya storefront."
+        badge={
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-800">
+            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Live
+          </span>
+        }
+        actions={
+          <Link
+            to="/admin/orders"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+          >
+            View orders
+          </Link>
+        }
+      />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Revenue (30d)"
           value={revenueFormatted}
-          hint="Nationwide storefront + Nairobi DC"
+          hint="Nationwide storefront"
+          accent="red"
           trend={{
-            label: `${revenueTrendUp ? '↑' : '↓'} ${revenueChangeStr.replace(/[+-]/g, '')} vs prior period`,
+            label: `${revenueTrendUp ? '↑' : '↓'} ${revenueChangeStr.replace(/[+-]/g, '')} vs prior`,
             positive: revenueTrendUp,
           }}
         />
         <StatCard
           title="Orders (30d)"
           value={`${totalOrders}`}
+          accent="sky"
           trend={{
-            label: `${ordersTrendUp ? '↑' : '↓'} ${ordersChangeStr.replace(/[+-]/g, '')} vs prior period`,
+            label: `${ordersTrendUp ? '↑' : '↓'} ${ordersChangeStr.replace(/[+-]/g, '')} vs prior`,
             positive: ordersTrendUp,
           }}
         />
-        <StatCard
-          title="Avg order value"
-          value={avgOrderValueFormatted}
-          hint="Excludes cancelled"
-        />
-        <StatCard
-          title="Active Customers"
-          value={`${activeCustomers}`}
-          hint="Ordering this period"
-        />
+        <StatCard title="Avg order value" value={avgOrderValueFormatted} hint="Excludes cancelled" accent="emerald" />
+        <StatCard title="Active customers" value={`${activeCustomers}`} hint="Ordering this period" accent="dark" />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-950">
-            Gross sales trend
-          </h2>
-          <p className="text-xs text-neutral-500">Kenyan Shillings, daily totals</p>
-          <div className="mt-6">
-            <SimpleBarChart
-              data={dynamicRevenueSeries}
-              barClass="bg-neutral-950"
-              valuePrefix="KSh "
-            />
-          </div>
-        </section>
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-950">
-            Activity / Sessions
-          </h2>
-          <p className="text-xs text-neutral-500">Daily conversion pipeline visits</p>
-          <div className="mt-6">
-            <SimpleBarChart
-              data={dynamicSessionsSeries}
-              barClass="bg-emerald-600"
-              valuePrefix=""
-            />
-          </div>
-        </section>
+        <AdminCard title="Gross sales trend" subtitle="Kenyan Shillings, daily totals">
+          <SimpleBarChart data={dynamicRevenueSeries} barClass="bg-neutral-950" valuePrefix="KSh " />
+        </AdminCard>
+        <AdminCard title="Order activity" subtitle="Daily order volume">
+          <SimpleBarChart data={dynamicSessionsSeries} barClass="bg-emerald-600" valuePrefix="" />
+        </AdminCard>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm lg:col-span-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-neutral-950">
-              Recent orders
-            </h2>
-            <Link
-              to="/admin/orders"
-              className="text-xs font-bold uppercase tracking-wide text-brand-red hover:underline"
-            >
+        <AdminCard title="Category revenue" subtitle="From database orders" className="lg:col-span-1">
+          {donutSegments.length ? (
+            <>
+              <SimpleDonut segments={donutSegments} />
+              <ul className="mt-6 space-y-2 border-t border-neutral-100 pt-4 text-sm">
+                {categoryData.slice(0, 5).map((c) => (
+                  <li key={c.name} className="flex justify-between gap-2">
+                    <span className="text-neutral-600">{c.name}</span>
+                    <span className="font-medium tabular-nums">{formatPrice(c.sales || 0)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="text-sm text-neutral-500">No category sales in this period.</p>
+          )}
+        </AdminCard>
+
+        <AdminCard title="Sales by county" subtitle="Kenya regional breakdown" className="lg:col-span-2">
+          {regionalData.length ? (
+            <ul className="space-y-4">
+              {regionalData.map((r) => (
+                <li key={r.region}>
+                  <div className="flex justify-between text-sm font-medium">
+                    <span>{r.region}</span>
+                    <span className="tabular-nums text-neutral-600">{r.orders} orders · {formatPrice(r.sales)}</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100">
+                    <div
+                      className="h-full rounded-full bg-brand-red"
+                      style={{
+                        width: `${Math.max(8, (r.sales / (regionalData[0]?.sales || 1)) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-neutral-500">No regional data yet — run demo seed.</p>
+          )}
+        </AdminCard>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <AdminCard
+          className="lg:col-span-2"
+          title="Recent orders"
+          subtitle="Latest transactions from checkout"
+          action={
+            <Link to="/admin/orders" className="text-xs font-bold uppercase tracking-wide text-brand-red hover:underline">
               View all
             </Link>
-          </div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
-                  <th className="pb-3 pr-3 font-semibold">Order</th>
-                  <th className="pb-3 pr-3 font-semibold">Customer</th>
-                  <th className="pb-3 pr-3 font-semibold">City</th>
-                  <th className="pb-3 pr-3 font-semibold">Status</th>
-                  <th className="pb-3 text-right font-semibold">Total</th>
+          }
+          padding={false}
+        >
+          <AdminTable minWidth="min-w-[520px]">
+            <AdminTableHead>
+              <AdminTh>Order</AdminTh>
+              <AdminTh>Customer</AdminTh>
+              <AdminTh>Status</AdminTh>
+              <AdminTh className="text-right">Total</AdminTh>
+            </AdminTableHead>
+            <AdminTableBody>
+              {transformedRecentOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-neutral-500">
+                    No recent orders yet.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {transformedRecentOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-neutral-500">
-                      No recent orders yet.
-                    </td>
+              ) : (
+                transformedRecentOrders.map((o) => (
+                  <tr key={o.id} className="transition hover:bg-neutral-50/80">
+                    <AdminTd className="font-semibold tabular-nums">
+                      <Link className="text-neutral-950 hover:text-brand-red hover:underline" to={`/admin/orders/${o.orderId}`}>
+                        {o.id}
+                      </Link>
+                    </AdminTd>
+                    <AdminTd className="text-neutral-700">{o.customer}</AdminTd>
+                    <AdminTd><OrderStatusPill status={o.status} /></AdminTd>
+                    <AdminTd className="text-right font-semibold tabular-nums">{formatPrice(o.totalKes)}</AdminTd>
                   </tr>
-                ) : (
-                  transformedRecentOrders.map((o) => (
-                    <tr key={o.id}>
-                      <td className="py-3 pr-3 font-medium tabular-nums">
-                        <Link
-                          className="text-neutral-950 hover:text-brand-red hover:underline"
-                          to={`/admin/orders/${o.orderId}`}
-                        >
-                          {o.id}
-                        </Link>
-                      </td>
-                      <td className="py-3 pr-3 text-neutral-700">{o.customer}</td>
-                      <td className="py-3 pr-3 text-neutral-600">—</td>
-                      <td className="py-3 pr-3">
-                        <OrderStatusPill status={o.status} />
-                      </td>
-                      <td className="py-3 text-right font-semibold tabular-nums">
-                        {formatPrice(o.totalKes)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                ))
+              )}
+            </AdminTableBody>
+          </AdminTable>
+        </AdminCard>
 
-        <section className="h-fit rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-950">Top SKUs</h2>
-          <p className="text-xs text-neutral-500">By revenue — database rank</p>
-          <ul className="mt-4 space-y-3">
-            {transformedTopProducts.map((p) => (
-              <li key={p.id}>
-                <div className="flex justify-between gap-2 text-sm">
-                  <span className="min-w-0 truncate font-medium text-neutral-800">
-                    {p.brand} — {p.name}
-                  </span>
-                  <span className="shrink-0 font-semibold tabular-nums text-neutral-950">
-                    {formatPrice(p.revenueKes)}
-                  </span>
+        <AdminCard title="Top SKUs" subtitle="By revenue">
+          <ul className="space-y-4">
+            {transformedTopProducts.map((p, i) => (
+              <li key={p.id} className="flex gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-xs font-bold text-neutral-600">
+                  {i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="truncate font-medium text-neutral-800">{p.brand} — {p.name}</span>
+                    <span className="shrink-0 font-semibold tabular-nums">{formatPrice(p.revenueKes)}</span>
+                  </div>
+                  <p className="text-xs text-neutral-500">{p.units} units sold</p>
                 </div>
-                <p className="text-xs text-neutral-500">{p.units} units sold</p>
               </li>
             ))}
           </ul>
-        </section>
+        </AdminCard>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-neutral-950">Ops Alerts &amp; Activity</h2>
-          <p className="text-xs text-neutral-500">Real-time system health checks</p>
-          <ul className="mt-4 space-y-4">
-            {transformedAlerts.map((a) => (
-              <li key={a.id} className="border-l-2 border-brand-red pl-3">
+        <AdminCard title="Ops alerts" subtitle="System activity">
+          <ul className="space-y-4">
+            {transformedAlerts.length ? transformedAlerts.map((a) => (
+              <li key={a.id} className="border-l-2 border-brand-red pl-4">
                 <p className="text-sm text-neutral-800">{a.text}</p>
-                <p className="text-[11px] text-neutral-500">
-                  {new Date(a.at).toLocaleString('en-KE', {
-                    dateStyle: 'medium',
-                    timeStyle: 'short',
-                  })}
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  {new Date(a.at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })}
                 </p>
               </li>
-            ))}
+            )) : (
+              <p className="text-sm text-neutral-500">No alerts right now.</p>
+            )}
           </ul>
-        </section>
+        </AdminCard>
 
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-neutral-950">Low stock</h2>
-            <Link
-              to="/admin/products"
-              className="text-xs font-bold uppercase tracking-wide text-brand-red hover:underline"
-            >
+        <AdminCard
+          title="Low stock"
+          subtitle="SKUs under 8 units"
+          action={
+            <Link to="/admin/products" className="text-xs font-bold uppercase tracking-wide text-brand-red hover:underline">
               Inventory
             </Link>
-          </div>
-          <p className="text-xs text-neutral-500">
-            SKUs under 8 units (includes manual adjustments)
-          </p>
+          }
+        >
           {lowStock.length === 0 ? (
-            <p className="mt-6 text-sm text-neutral-600">
-              All tracked SKUs are above the danger line.
-            </p>
+            <p className="text-sm text-neutral-600">All tracked SKUs are above the danger line.</p>
           ) : (
-            <ul className="mt-4 space-y-3">
+            <ul className="space-y-3">
               {lowStock.slice(0, 6).map((p) => (
-                <li key={p.id}>
-                  <Link
-                    to={`/admin/products/${p.product_id}/edit`}
-                    className="text-sm font-medium text-neutral-900 hover:text-brand-red"
-                  >
+                <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50/80 px-3 py-2.5">
+                  <Link to={`/admin/products/${p.product_id}/edit`} className="text-sm font-medium text-neutral-900 hover:text-brand-red">
                     {p.brand} — {p.name}
                   </Link>
-                  <p className="text-xs text-amber-800">
-                    {p.stock_quantity ?? 0} units on hand
-                  </p>
+                  <span className="shrink-0 text-xs font-bold text-amber-800">{p.stock_quantity ?? 0} left</span>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </AdminCard>
       </div>
-    </div>
+    </AdminPage>
   );
 }
-

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState.jsx';
+import { FreeShippingNote } from '../components/FreeShippingNote.jsx';
 import { useCart } from '../hooks/useCart.js';
 import { formatPrice } from '../utils/format.js';
 
@@ -115,6 +116,7 @@ export function Cart() {
               </div>
             </dl>
             <div className="my-4 border-t border-neutral-200" />
+            <FreeShippingNote subtotal={subtotal} className="mb-4" />
             <div className="flex justify-between text-base font-bold">
               <span>Total</span>
               <span>{formatPrice(subtotal)}</span>

@@ -17,9 +17,37 @@ export function clearAuthStorage() {
   notifyAuthChange();
 }
 
+/** Clear session and send the user to sign-in (voluntary logout). */
+export function logoutAndRedirect(navigate) {
+  clearAuthStorage();
+  if (typeof navigate === 'function') {
+    navigate('/sign-in', { replace: true, state: { signedOut: true } });
+  }
+}
+
 function toErrorMessage(payload, fallback) {
   if (!payload || typeof payload !== 'object') return fallback;
   return payload.error || payload.message || fallback;
+}
+
+/** @param {Record<string, unknown> | null | undefined} user */
+export function isAdminUser(user) {
+  if (!user) return false;
+  const role = String(user.role || '').toLowerCase();
+  return Boolean(user.is_admin) || role === 'admin' || role === 'manager';
+}
+
+/** @param {Record<string, unknown> | null | undefined} user @param {string} [requestedReturn] */
+export function getPostLoginDestination(user, requestedReturn) {
+  const isAdmin = isAdminUser(user);
+  if (isAdmin) {
+    if (requestedReturn?.startsWith('/admin') && requestedReturn !== '/admin/login') {
+      return requestedReturn;
+    }
+    return '/admin/dashboard';
+  }
+  if (requestedReturn?.startsWith('/admin')) return '/shop';
+  return requestedReturn || '/shop';
 }
 
 export async function loginRequest(email, password) {
@@ -58,7 +86,7 @@ export async function loginRequest(email, password) {
       console.log('[Auth] Saved "refreshToken" - verification:', !!localStorage.getItem('refreshToken'));
     }
     
-    if (payload.user?.is_admin) {
+    if (isAdminUser(payload.user)) {
       localStorage.setItem('adminToken', payload.access_token);
       console.log('[Auth] Saved "adminToken" - verification:', !!localStorage.getItem('adminToken'));
     }

@@ -1,12 +1,24 @@
-import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { SUPPORT_EMAIL } from '../config/brand.js';
-import { loginRequest, registerRequest } from '../utils/authApi.js';
+import { useStoreSettings } from '../hooks/useStoreSettings.js';
+import {
+  getPostLoginDestination,
+  isAdminUser,
+  loginRequest,
+  registerRequest,
+} from '../utils/authApi.js';
 
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const returnTo = location.state?.from || '/shop';
+  const [searchParams] = useSearchParams();
+  const returnTo = useMemo(() => {
+    const fromQuery = searchParams.get('from');
+    if (fromQuery?.startsWith('/admin') && fromQuery !== '/admin/login') return fromQuery;
+    if (typeof location.state?.from === 'string') return location.state.from;
+    return '/shop';
+  }, [searchParams, location.state]);
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -20,6 +32,19 @@ export function SignIn() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [signedInAsAdmin, setSignedInAsAdmin] = useState(false);
+  const { settings } = useStoreSettings();
+  const supportEmail = settings.support_email || SUPPORT_EMAIL;
+
+  useEffect(() => {
+    if (!location.state?.signedOut) return;
+    setSubmitted(false);
+    setEmail('');
+    setPassword('');
+    setError('');
+    setMessage('You have been signed out. Sign in again to continue.');
+    navigate('/sign-in', { replace: true, state: { from: location.state?.from } });
+  }, [location.state?.signedOut, location.state?.from, navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -42,9 +67,16 @@ export function SignIn() {
       } else {
         const payload = await loginRequest(email, password);
         const user = payload?.user;
-        setMessage(`Welcome back, ${user?.username || user?.email || 'user'}!`);
+        const destination = getPostLoginDestination(user, returnTo);
+        const admin = isAdminUser(user);
+        setSignedInAsAdmin(admin);
+        setMessage(
+          admin
+            ? `Welcome back, ${user?.username || user?.email || 'admin'}!`
+            : `Welcome back, ${user?.username || user?.email || 'user'}!`,
+        );
         setSubmitted(true);
-        setTimeout(() => navigate(returnTo), 1200);
+        setTimeout(() => navigate(destination), 1200);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
@@ -91,12 +123,21 @@ export function SignIn() {
             {message || 'Your account is connected to backend auth.'}
           </p>
           <div className="mt-6 flex flex-col gap-2">
-            <Link
-              to="/shop"
-              className="rounded-full bg-brand-red py-3 text-sm font-bold uppercase text-white transition hover:bg-brand-red-hover"
-            >
-              Continue shopping
-            </Link>
+            {signedInAsAdmin ? (
+              <Link
+                to="/admin/dashboard"
+                className="rounded-full bg-brand-red py-3 text-sm font-bold uppercase text-white transition hover:bg-brand-red-hover"
+              >
+                Go to admin portal
+              </Link>
+            ) : (
+              <Link
+                to="/shop"
+                className="rounded-full bg-brand-red py-3 text-sm font-bold uppercase text-white transition hover:bg-brand-red-hover"
+              >
+                Continue shopping
+              </Link>
+            )}
             <Link
               to="/"
               className="py-2 text-sm font-semibold text-neutral-700 hover:text-neutral-950"
@@ -112,6 +153,9 @@ export function SignIn() {
         >
           {error ? (
             <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+          ) : null}
+          {message && mode === 'login' && !error ? (
+            <p className="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-neutral-700">{message}</p>
           ) : null}
           {message && mode === 'register' ? (
             <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>
@@ -218,8 +262,8 @@ export function SignIn() {
           </button>
           <p className="text-center text-xs text-neutral-500">
             Forgot password? Contact{' '}
-            <a className="text-brand-red" href={`mailto:${SUPPORT_EMAIL}`}>
-              {SUPPORT_EMAIL}
+            <a className="text-brand-red" href={`mailto:${supportEmail}`}>
+              {supportEmail}
             </a>
           </p>
         </form>

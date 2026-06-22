@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { FreeShippingNote } from './FreeShippingNote.jsx';
 import { useCart } from '../hooks/useCart.js';
 import { mergeCatalogList } from '../utils/catalogStorage.js';
 import { formatPrice } from '../utils/format.js';
@@ -244,9 +245,9 @@ export function CartDrawer() {
               <span className="text-neutral-600">Subtotal</span>
               <span className="text-lg font-bold">{formatPrice(subtotal)}</span>
             </div>
+            <FreeShippingNote subtotal={subtotal} className="mt-2" />
             <p className="mt-1 text-xs text-neutral-500">
-              16% VAT &amp; courier fees shown at checkout (KSh). M-Pesa paybill
-              coming soon.
+              VAT &amp; courier fees quoted at checkout.
             </p>
             <div className="mt-4 flex flex-col gap-2">
               <Link

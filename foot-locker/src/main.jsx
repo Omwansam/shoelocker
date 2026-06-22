@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { CartProvider } from './context/CartContext.jsx';
 import { AdminAuthProvider } from './context/AdminAuthContext.jsx';
+import { StoreSettingsProvider } from './context/StoreSettingsContext.jsx';
 import { ToastProvider } from './context/ToastContext.jsx';
 import { WishlistProvider } from './context/WishlistContext.jsx';
 import { CartToastBridge } from './components/CartToastBridge.jsx';
@@ -16,9 +17,11 @@ createRoot(document.getElementById('root')).render(
         <CartProvider>
           <CartToastBridge />
           <WishlistProvider>
-            <AdminAuthProvider>
-              <App />
-            </AdminAuthProvider>
+            <StoreSettingsProvider>
+              <AdminAuthProvider>
+                <App />
+              </AdminAuthProvider>
+            </StoreSettingsProvider>
           </WishlistProvider>
         </CartProvider>
       </ToastProvider>

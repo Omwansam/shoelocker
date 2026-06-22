@@ -48,6 +48,29 @@ def ensure_default_settings():
         db.session.add(setting)
     db.session.commit()
 
+@settings_bp.route('/store', methods=['GET'])
+def get_public_store_settings():
+    """Public store settings for checkout and storefront."""
+    try:
+        ensure_default_settings()
+        keys = (
+            'free_shipping_threshold',
+            'currency',
+            'country',
+            'locale',
+            'support_email',
+            'mpesa_enabled',
+            'cod_enabled',
+        )
+        out = {}
+        for key in keys:
+            setting = Settings.query.filter_by(setting_key=key).first()
+            out[key] = setting.get_value() if setting else None
+        return jsonify({'settings': out}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching public settings: {str(e)}")
+        return jsonify({'error': 'Failed to fetch store settings'}), 500
+
 @settings_bp.route('/admin/settings', methods=['GET'])
 @jwt_required()
 @admin_required

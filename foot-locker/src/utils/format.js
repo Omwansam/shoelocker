@@ -3,11 +3,20 @@ import {
   MARKET_LOCALE,
 } from '../config/market.js';
 
-/** @param {number} value — amount in KES */
+let activeLocale = MARKET_LOCALE;
+let activeCurrency = CURRENCY_CODE;
+
+/** @param {{ locale?: string, currency?: string }} config */
+export function configureFormatting(config = {}) {
+  if (config.locale) activeLocale = config.locale;
+  if (config.currency) activeCurrency = config.currency;
+}
+
+/** @param {number} value — amount in store currency */
 export function formatPrice(value) {
-  return new Intl.NumberFormat(MARKET_LOCALE, {
+  return new Intl.NumberFormat(activeLocale, {
     style: 'currency',
-    currency: CURRENCY_CODE,
+    currency: activeCurrency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(Math.round(value));

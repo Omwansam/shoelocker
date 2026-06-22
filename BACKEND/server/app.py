@@ -26,6 +26,9 @@ from routes.stripe_route import stripe_bp
 from routes.settings_route import settings_bp
 from routes.shipping_route import shipping_bp
 from routes.wishlist_route import wishlist_bp
+from routes.newsletter_route import newsletter_bp
+from routes.reviews_route import reviews_bp
+from routes.product_ai_route import product_ai_bp
 
 import os
 
@@ -131,10 +134,13 @@ app.register_blueprint(settings_bp, url_prefix = '/settings')
 # Register shipping blueprint (prefix defined inside shipping blueprint)
 app.register_blueprint(shipping_bp)
 app.register_blueprint(wishlist_bp, url_prefix='/wishlist')
+app.register_blueprint(newsletter_bp, url_prefix='/newsletter')
+app.register_blueprint(reviews_bp, url_prefix='/reviews')
 
 # Register auth, products, and product images blueprints
 app.register_blueprint(users_bp, url_prefix='/auth')
 app.register_blueprint(product_bp, url_prefix='/api')
+app.register_blueprint(product_ai_bp, url_prefix='/api')
 app.register_blueprint(product_image_bp, url_prefix='/productimages')
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@ requests = "*"
 stripe = "*"
 psycopg2-binary = "*"
 flask = "*"
+pillow = "*"
 
 [dev-packages]
 

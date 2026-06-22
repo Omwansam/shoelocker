@@ -293,6 +293,10 @@ def register():
     if not data.get('username') or not data.get('email') or not data.get('password'):
         return jsonify({"error": "Missing required fields"}), 400
 
+    requested_role = str(data.get('role') or '').strip().upper()
+    if data.get('is_admin') or requested_role in ('ADMIN', 'MANAGER', 'STAFF'):
+        return jsonify({"error": "Admin accounts cannot be created via registration"}), 403
+
     username = data['username'].strip()
     email = data['email'].strip().lower()
     password = data['password']
@@ -338,6 +342,37 @@ def me():
     if not user:
         return jsonify({"error": "User not found"}), 404
     return jsonify({"user": _serialize_user(user)}), 200
+
+
+@users_bp.route('/me', methods=['PUT'])
+@jwt_required()
+def update_me():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json() or {}
+    if 'first_name' in data:
+        user.first_name = (data.get('first_name') or '').strip() or None
+    if 'last_name' in data:
+        user.last_name = (data.get('last_name') or '').strip() or None
+    if 'phone' in data:
+        user.phone = (data.get('phone') or '').strip() or None
+    if 'address' in data:
+        user.address = (data.get('address') or '').strip() or None
+
+    if 'password' in data and data['password']:
+        new_password = data['password']
+        if len(new_password) < 8:
+            return jsonify({"error": "Password must be at least 8 characters"}), 400
+        user.password_hash = generate_password_hash(new_password)
+
+    try:
+        db.session.commit()
+        return jsonify({"message": "Profile updated", "user": _serialize_user(user)}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to update profile", "details": str(e)}), 500
 
 @users_bp.route('/admin/customers', methods=['GET'])
 @jwt_required()

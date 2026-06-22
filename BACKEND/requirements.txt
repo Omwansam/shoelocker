@@ -8,3 +8,4 @@ requests
 stripe
 psycopg2-binary
 gunicorn
+pillow

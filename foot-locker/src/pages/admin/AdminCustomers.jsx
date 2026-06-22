@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { mockCustomers } from '../../data/adminMock.js';
 import { formatPrice } from '../../utils/format.js';
 import { fetchAdminCustomers } from '../../utils/api.js';
+import { AdminPage } from '../../components/admin/ui/AdminPage.jsx';
+import { AdminPageHeader } from '../../components/admin/ui/AdminPageHeader.jsx';
+import { AdminCard } from '../../components/admin/ui/AdminCard.jsx';
+import { AdminAlert } from '../../components/admin/ui/AdminAlert.jsx';
+import { AdminInput } from '../../components/admin/ui/AdminInput.jsx';
+import { AdminButton } from '../../components/admin/ui/AdminButton.jsx';
+import { AdminLoading } from '../../components/admin/ui/AdminLoading.jsx';
 
 export function AdminCustomers() {
   const [searchDraft, setSearchDraft] = useState('');
@@ -42,60 +48,37 @@ export function AdminCustomers() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 animate-fade-rise">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-950">Customers</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            CRM Customer Directory fetched from live authentication databases.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-600">
-          Total Customers: {customers.length}
-        </div>
-      </div>
+    <AdminPage>
+      <AdminPageHeader
+        title="Customers"
+        description="CRM directory synced from live authentication and order data."
+        badge={
+          <span className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-neutral-600">
+            {customers.length} total
+          </span>
+        }
+      />
 
       <form onSubmit={handleSearchSubmit} className="flex max-w-md gap-2">
-        <div className="flex-1">
-          <label htmlFor="crm-search" className="sr-only">Search Customers</label>
-          <input
-            id="crm-search"
-            value={searchDraft}
-            onChange={(e) => setSearchDraft(e.target.value)}
-            placeholder="Username, email or city…"
-            className="w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-red/25"
-          />
-        </div>
-        <button
-          type="submit"
-          className="rounded-full bg-neutral-950 px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800"
-        >
-          Search
-        </button>
+        <AdminInput id="crm-search" className="flex-1" value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Username or email…" />
+        <AdminButton variant="dark" type="submit">Search</AdminButton>
       </form>
 
       {loading ? (
-        <div className="flex min-h-[250px] flex-col items-center justify-center space-y-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-red border-t-transparent" />
-          <p className="text-sm text-neutral-500">Querying customer CRM profiles...</p>
-        </div>
+        <AdminLoading label="Loading customers…" minHeight="min-h-[250px]" />
       ) : error ? (
-        <div className="rounded-2xl border border-brand-red/20 bg-brand-red/5 p-6 text-center text-neutral-600">
-          <p className="font-semibold text-neutral-950">Failed to load CRM data</p>
-          <p className="mt-2 text-xs text-neutral-500">{error}</p>
-        </div>
+        <AdminAlert>{error}</AdminAlert>
       ) : customers.length === 0 ? (
-        <div className="rounded-2xl border border-neutral-200 bg-white p-10 text-center text-neutral-600">
-          <p className="font-semibold">No profiles found</p>
-          <p className="mt-2 text-sm">No customers matched your query "{q}". Try widening your filters.</p>
-        </div>
+        <AdminCard>
+          <div className="py-8 text-center text-neutral-600">
+            <p className="font-semibold text-neutral-950">No profiles found</p>
+            <p className="mt-2 text-sm">No customers matched your query &ldquo;{q}&rdquo;.</p>
+          </div>
+        </AdminCard>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {customers.map((c) => (
-            <article
-              key={c.email}
-              className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm hover:shadow-md transition duration-200"
-            >
+            <AdminCard key={c.email} padding className="transition hover:-translate-y-0.5 hover:shadow-lg">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold text-neutral-950">{c.username}</p>
                 <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
@@ -128,11 +111,11 @@ export function AdminCustomers() {
               >
                 Search orders →
               </Link>
-            </article>
+            </AdminCard>
           ))}
         </div>
       )}
-    </div>
+    </AdminPage>
   );
 }
 

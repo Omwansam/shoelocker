@@ -1,82 +1,90 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { COMPANY_NAME, SUPPORT_EMAIL } from '../config/brand.js';
-
-const sections = /** @type {const} */ ([
-  {
-    id: 'contact',
-    title: 'Contact us',
-    body: (
-      <>
-        Reach the {COMPANY_NAME} care desk at{` `}
-        <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold text-brand-red">
-          {SUPPORT_EMAIL}
-        </a>{' '}
-        or visit a{' '}
-        <Link to="/stores" className="font-semibold text-brand-red hover:underline">
-          retail location
-        </Link>
-        . EAT hours — typical reply same business day for Nairobi time.
-      </>
-    ),
-  },
-  {
-    id: 'orders',
-    title: 'Order status',
-    body: 'Once checkout supports live orders, tracking links will appear here and in confirmation email. For now, use the checkout mock to simulate a completed order.',
-  },
-  {
-    id: 'shipping',
-    title: 'Shipping info',
-    body: `${COMPANY_NAME} dispatches from Nairobi with same-day handoff to couriers when stock is on-hand. Nairobi & Kiambu metro: 1–2 business days. Coast & western towns: 2–4 business days. Remote counties: up to 5 business days. All prices on site are in Kenyan Shillings (KSh) inclusive of VAT where applicable.`,
-  },
-  {
-    id: 'pickup',
-    title: 'Store pickup',
-    body: 'Order online and collect at Two Rivers, Sarit, Nyali, Kisumu Mega, or Nakuru Westside during mall hours. Bring your order ID and national ID or passport for verification.',
-  },
-  {
-    id: 'returns',
-    title: 'Returns & exchanges',
-    body: 'Unworn pairs in original box with tags may be exchanged within 14 days in-store (Nairobi branches) or returned within 30 days nationwide via our courier network. M-Pesa refunds follow when payment rails are connected.',
-  },
-  {
-    id: 'about',
-    title: 'About ShoeLocker',
-    body: `${COMPANY_NAME} is a Kenya-first sneaker retailer blending global brands with local service — flagship web experience, nationwide delivery, and mall stores you can walk into.`,
-  },
-  {
-    id: 'careers',
-    title: 'Careers',
-    body: 'We hire bold merchandisers and engineers — career listings would live here.',
-  },
-  {
-    id: 'affiliates',
-    title: 'Affiliates',
-    body: 'Creator and partner applications will open seasonal drops — placeholder for future program details.',
-  },
-  {
-    id: 'gift-cards',
-    title: 'Gift cards',
-    body: 'Digital gift cards can be redeemed online and in participating stores once payments go live.',
-  },
-  {
-    id: 'terms',
-    title: 'Terms of use',
-    body: 'By using this site you agree to shop responsibly and respect brand guidelines. This build is for demonstration.',
-  },
-  {
-    id: 'privacy',
-    title: 'Privacy',
-    body: 'This app does not use browser local storage for persisted user data; account and commerce data are backend-managed.',
-  },
-  {
-    id: 'accessibility',
-    title: 'Accessibility',
-    body: `${COMPANY_NAME} targets WCAG-aligned patterns: keyboard focus, dialogs, skip links, and descriptive labels throughout the UI.`,
-  },
-]);
+import { COMPANY_NAME } from '../config/brand.js';
+import { useStoreSettings } from '../hooks/useStoreSettings.js';
+import { formatPrice } from '../utils/format.js';
 
 export function Support() {
+  const { settings } = useStoreSettings();
+
+  const sections = useMemo(
+    () => [
+      {
+        id: 'contact',
+        title: 'Contact us',
+        body: (
+          <>
+            Reach the {COMPANY_NAME} care desk at{' '}
+            <a href={`mailto:${settings.support_email}`} className="font-semibold text-brand-red">
+              {settings.support_email}
+            </a>{' '}
+            or visit a{' '}
+            <Link to="/stores" className="font-semibold text-brand-red hover:underline">
+              retail location
+            </Link>
+            . EAT hours — typical reply same business day for Nairobi time.
+          </>
+        ),
+      },
+      {
+        id: 'orders',
+        title: 'Order status',
+        body: 'Track orders from your account after checkout. Confirmation details are sent when order emails are enabled in store settings.',
+      },
+      {
+        id: 'shipping',
+        title: 'Shipping info',
+        body: `${COMPANY_NAME} dispatches from Nairobi with same-day handoff to couriers when stock is on-hand. Free standard delivery on orders over ${formatPrice(settings.free_shipping_threshold)} within ${settings.country}. Nairobi & Kiambu metro: 1–2 business days. Coast & western towns: 2–4 business days. Remote counties: up to 5 business days. All prices on site are in ${settings.currency} inclusive of VAT where applicable.`,
+      },
+      {
+        id: 'pickup',
+        title: 'Store pickup',
+        body: 'Order online and collect at Two Rivers, Sarit, Nyali, Kisumu Mega, or Nakuru Westside during mall hours. Bring your order ID and national ID or passport for verification.',
+      },
+      {
+        id: 'returns',
+        title: 'Returns & exchanges',
+        body: 'Unworn pairs in original box with tags may be exchanged within 14 days in-store (Nairobi branches) or returned within 30 days nationwide via our courier network. M-Pesa refunds follow when payment rails are connected.',
+      },
+      {
+        id: 'about',
+        title: 'About ShoeLocker',
+        body: `${COMPANY_NAME} is a Kenya-first sneaker retailer blending global brands with local service — flagship web experience, nationwide delivery, and mall stores you can walk into.`,
+      },
+      {
+        id: 'careers',
+        title: 'Careers',
+        body: 'We hire bold merchandisers and engineers — career listings would live here.',
+      },
+      {
+        id: 'affiliates',
+        title: 'Affiliates',
+        body: 'Creator and partner applications will open seasonal drops — placeholder for future program details.',
+      },
+      {
+        id: 'gift-cards',
+        title: 'Gift cards',
+        body: 'Digital gift cards can be redeemed online and in participating stores once payments go live.',
+      },
+      {
+        id: 'terms',
+        title: 'Terms of use',
+        body: 'By using this site you agree to shop responsibly and respect brand guidelines. This build is for demonstration.',
+      },
+      {
+        id: 'privacy',
+        title: 'Privacy',
+        body: 'Account and commerce data are backend-managed. Sign out clears your session on this device.',
+      },
+      {
+        id: 'accessibility',
+        title: 'Accessibility',
+        body: `${COMPANY_NAME} targets WCAG-aligned patterns: keyboard focus, dialogs, skip links, and descriptive labels throughout the UI.`,
+      },
+    ],
+    [settings],
+  );
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
       <h1 className="font-[800] uppercase tracking-tighter text-neutral-950 [font-stretch:condensed] sm:text-4xl">

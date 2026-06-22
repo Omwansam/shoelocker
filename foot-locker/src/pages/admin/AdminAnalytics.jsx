@@ -3,6 +3,12 @@ import { fetchAdminAnalytics } from '../../utils/api.js';
 import { formatPrice } from '../../utils/format.js';
 import { SimpleBarChart } from '../../components/admin/SimpleBarChart.jsx';
 import { SimpleDonut } from '../../components/admin/SimpleDonut.jsx';
+import { StatCard } from '../../components/admin/StatCard.jsx';
+import { AdminPage } from '../../components/admin/ui/AdminPage.jsx';
+import { AdminPageHeader } from '../../components/admin/ui/AdminPageHeader.jsx';
+import { AdminCard } from '../../components/admin/ui/AdminCard.jsx';
+import { AdminLoading } from '../../components/admin/ui/AdminLoading.jsx';
+import { AdminAlert } from '../../components/admin/ui/AdminAlert.jsx';
 
 export function AdminAnalytics() {
   const [data, setData] = useState(null);
@@ -28,19 +34,13 @@ export function AdminAnalytics() {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[300px] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-red border-t-transparent" />
-      </div>
-    );
-  }
+  if (loading) return <AdminLoading label="Loading analytics…" />;
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-brand-red/20 bg-brand-red/5 p-6 text-center">
-        <p className="text-sm text-neutral-700">{error}</p>
-      </div>
+      <AdminPage>
+        <AdminAlert>{error}</AdminAlert>
+      </AdminPage>
     );
   }
 
@@ -70,25 +70,21 @@ export function AdminAnalytics() {
   const maxSegment = Math.max(...segments.map((s) => s.count), 1);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 animate-fade-rise">
-      <div>
-        <h1 className="text-2xl font-bold text-neutral-950">Analytics</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Live sales trends, category performance, and customer segments from the backend.
-        </p>
-      </div>
+    <AdminPage className="space-y-8">
+      <AdminPageHeader
+        title="Analytics"
+        description="Sales trends, category performance, and customer segments from the backend."
+      />
 
-      <section className="grid gap-4 sm:grid-cols-4">
-        <Stat label="Orders (30d)" value={String(overview.total_orders ?? 0)} />
-        <Stat label="Revenue (30d)" value={formatPrice(overview.total_revenue ?? 0)} />
-        <Stat label="Customers" value={String(overview.total_customers ?? 0)} />
-        <Stat label="Products" value={String(overview.total_products ?? 0)} />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Orders (30d)" value={String(overview.total_orders ?? 0)} accent="sky" />
+        <StatCard title="Revenue (30d)" value={formatPrice(overview.total_revenue ?? 0)} accent="red" />
+        <StatCard title="Customers" value={String(overview.total_customers ?? 0)} accent="emerald" />
+        <StatCard title="Products" value={String(overview.total_products ?? 0)} accent="dark" />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm lg:col-span-2">
-          <h2 className="text-lg font-semibold">Revenue &amp; orders</h2>
-          <p className="text-xs text-neutral-500">Rolling 30 days</p>
+        <AdminCard title="Revenue & orders" subtitle="Rolling 30 days from database" className="lg:col-span-2">
           <div className="mt-6 space-y-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -103,11 +99,9 @@ export function AdminAnalytics() {
               <SimpleBarChart data={sessionsSeries} barClass="bg-neutral-950" valuePrefix="" />
             </div>
           </div>
-        </section>
+        </AdminCard>
 
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">Category revenue</h2>
-          <p className="text-xs text-neutral-500">Share of delivered-order revenue</p>
+        <AdminCard title="Category revenue" subtitle="Share of order revenue">
           {donutSegments.length ? (
             <>
               <div className="mt-6">
@@ -127,12 +121,10 @@ export function AdminAnalytics() {
           ) : (
             <p className="mt-6 text-sm text-neutral-500">No category data yet.</p>
           )}
-        </section>
+        </AdminCard>
       </div>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Customer segments</h2>
-        <p className="text-xs text-neutral-500">By lifetime order value (30d window)</p>
+      <AdminCard title="Customer segments" subtitle="By spend in the last 30 days (database)">
         <ul className="mt-6 space-y-4">
           {segments.map((s) => (
             <li key={s.segment}>
@@ -149,17 +141,7 @@ export function AdminAnalytics() {
             </li>
           ))}
         </ul>
-      </section>
-    </div>
-  );
-}
-
-/** @param {{ label: string, value: string }} props */
-function Stat({ label, value }) {
-  return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
-      <p className="mt-2 text-2xl font-bold tabular-nums">{value}</p>
-    </div>
+      </AdminCard>
+    </AdminPage>
   );
 }

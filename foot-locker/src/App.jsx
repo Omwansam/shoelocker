@@ -7,7 +7,6 @@ import { AdminShell } from './layouts/AdminShell.jsx';
 import { AdminAnalytics } from './pages/admin/AdminAnalytics.jsx';
 import { AdminCustomers } from './pages/admin/AdminCustomers.jsx';
 import { AdminDashboard } from './pages/admin/AdminDashboard.jsx';
-import { AdminLogin } from './pages/admin/AdminLogin.jsx';
 import { AdminOrderDetail } from './pages/admin/AdminOrderDetail.jsx';
 import { AdminOrders } from './pages/admin/AdminOrders.jsx';
 import { AdminProductForm } from './pages/admin/AdminProductForm.jsx';
@@ -16,6 +15,10 @@ import { AdminPromotions } from './pages/admin/AdminPromotions.jsx';
 import { AdminReports } from './pages/admin/AdminReports.jsx';
 import { AdminSettings } from './pages/admin/AdminSettings.jsx';
 import { AccountOrders } from './pages/AccountOrders.jsx';
+import { AccountOrderDetail } from './pages/AccountOrderDetail.jsx';
+import { AccountProfile } from './pages/account/AccountProfile.jsx';
+import { AccountAddresses } from './pages/account/AccountAddresses.jsx';
+import { AccountLayout } from './layouts/AccountLayout.jsx';
 import { Cart } from './pages/Cart.jsx';
 import { Checkout } from './pages/Checkout.jsx';
 import { Home } from './pages/Home.jsx';
@@ -61,7 +64,10 @@ function Layout() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route
+        path="/admin/login"
+        element={<Navigate to="/sign-in" replace />}
+      />
       <Route path="admin" element={<RequireAdmin />}>
         <Route element={<AdminShell />}>
           <Route index element={<Navigate to="dashboard" replace />} />
@@ -96,11 +102,13 @@ export default function App() {
         <Route path="checkout" element={<Checkout />} />
         <Route path="search" element={<SearchResults />} />
         <Route path="wishlist" element={<WishlistPage />} />
-        <Route path="account/orders" element={<AccountOrders />} />
-        <Route
-          path="account"
-          element={<Navigate to="/account/orders" replace />}
-        />
+        <Route path="account" element={<AccountLayout />}>
+          <Route index element={<Navigate to="/account/orders" replace />} />
+          <Route path="orders" element={<AccountOrders />} />
+          <Route path="orders/:orderId" element={<AccountOrderDetail />} />
+          <Route path="profile" element={<AccountProfile />} />
+          <Route path="addresses" element={<AccountAddresses />} />
+        </Route>
         <Route path="stores" element={<StoreLocator />} />
         <Route path="sign-in" element={<SignIn />} />
         <Route path="rewards" element={<Rewards />} />

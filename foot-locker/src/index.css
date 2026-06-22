@@ -34,6 +34,28 @@
   animation: fade-rise 0.55s ease-out both;
 }
 
+/* Admin console */
+.admin-shell {
+  @apply text-neutral-900;
+}
+
+.admin-sidebar {
+  background: linear-gradient(180deg, #0c0c0c 0%, #111111 42%, #0a0a0a 100%);
+  color: white;
+  box-shadow: 4px 0 24px -8px rgb(0 0 0 / 0.25);
+}
+
+.admin-nav-active {
+  box-shadow: inset 3px 0 0 0 var(--color-brand-red);
+}
+
+.admin-main {
+  background-color: #f3f4f6;
+  background-image:
+    radial-gradient(circle at 100% 0%, rgb(230 0 18 / 0.035), transparent 42%),
+    linear-gradient(180deg, #f8f9fb 0%, #eef0f4 100%);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

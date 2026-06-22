@@ -45,33 +45,19 @@ export function AccountOrders() {
 
   if (!isLoggedIn()) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="text-xs font-bold uppercase tracking-widest text-brand-red">Account</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-black">Order history</h1>
-        <div className="mt-10 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-10 text-center">
-          <p className="text-neutral-700">Sign in to view your order history.</p>
-          <Link
-            to="/sign-in"
-            className="mt-4 inline-flex text-sm font-semibold text-brand-red hover:underline"
-          >
-            Sign in
-          </Link>
-        </div>
+      <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-10 text-center">
+        <p className="text-neutral-700">Sign in to view your order history.</p>
+        <Link to="/sign-in" className="mt-4 inline-flex text-sm font-semibold text-brand-red hover:underline">Sign in</Link>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      <p className="text-xs font-bold uppercase tracking-widest text-brand-red">Account</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-black">Order history</h1>
-      <p className="mt-2 text-neutral-600">
-        Orders placed through checkout, synced from your account.
-      </p>
+    <div>
+      <h2 className="text-xl font-semibold text-black">Order history</h2>
+      <p className="mt-2 text-neutral-600">Orders placed through checkout, synced from your account.</p>
 
-      {error ? (
-        <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
-      ) : null}
+      {error ? <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
 
       {loading ? (
         <div className="mt-10 flex justify-center">
@@ -80,45 +66,30 @@ export function AccountOrders() {
       ) : !orders.length ? (
         <div className="mt-10 rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-10 text-center">
           <p className="text-neutral-700">No orders yet — your next checkout will appear here.</p>
-          <Link
-            to="/shop"
-            className="mt-4 inline-flex text-sm font-semibold text-brand-red hover:underline"
-          >
-            Start shopping
-          </Link>
+          <Link to="/shop" className="mt-4 inline-flex text-sm font-semibold text-brand-red hover:underline">Start shopping</Link>
         </div>
       ) : (
-        <ul className="mt-10 space-y-6">
+        <ul className="mt-8 space-y-6">
           {orders.map((o) => (
-            <li
-              key={o.order_id}
-              className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
-            >
+            <li key={o.order_id} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-mono text-sm font-semibold text-black">{o.id}</p>
+                <Link to={`/account/orders/${o.order_id}`} className="font-mono text-sm font-semibold text-black hover:text-brand-red">
+                  {o.id}
+                </Link>
                 <p className="text-xs text-neutral-500">{formatDate(o.date)}</p>
               </div>
-              <p className="mt-1 text-sm text-neutral-600">
-                Status: {labelForOrderStatus(o.status)}
-              </p>
-              {o.shipping_address ? (
-                <p className="mt-3 text-sm text-neutral-700">{o.shipping_address}</p>
-              ) : null}
+              <p className="mt-1 text-sm text-neutral-600">Status: {labelForOrderStatus(o.status)}</p>
               <ul className="mt-4 space-y-2 border-t border-neutral-100 pt-4 text-sm">
-                {(o.items || []).map((line) => (
+                {(o.items || []).slice(0, 3).map((line) => (
                   <li key={`${line.product_id}-${line.name}`} className="flex justify-between gap-3">
-                    <span className="min-w-0 text-neutral-800">
-                      {line.name} × {line.quantity}
-                    </span>
-                    <span className="shrink-0 font-medium">
-                      {formatPrice((line.price || 0) * line.quantity)}
-                    </span>
+                    <span className="min-w-0 text-neutral-800">{line.name} × {line.quantity}</span>
+                    <span className="shrink-0 font-medium">{formatPrice((line.price || 0) * line.quantity)}</span>
                   </li>
                 ))}
               </ul>
-              <div className="mt-4 flex justify-between border-t border-neutral-100 pt-4 text-base font-bold">
-                <span>Total</span>
-                <span>{formatPrice(o.total || 0)}</span>
+              <div className="mt-4 flex items-center justify-between border-t border-neutral-100 pt-4">
+                <span className="text-base font-bold">{formatPrice(o.total || 0)}</span>
+                <Link to={`/account/orders/${o.order_id}`} className="text-sm font-semibold text-brand-red hover:underline">View details</Link>
               </div>
             </li>
           ))}

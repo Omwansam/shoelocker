@@ -59,6 +59,10 @@ class Config:
     # Backward-compatible alias (some utils referenced MPESA_STK_PUSH_URL)
     MPESA_STK_PUSH_URL = DARAJA_STK_PUSH_URL
 
+    # Google Gemini (product photo AI assist)
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+    GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
+
     # CORS (comma-separated origins for production deployments)
     CORS_ORIGINS = [
         origin.strip()

@@ -7,7 +7,7 @@ import { ProductReviews } from '../components/ProductReviews.jsx';
 import { useCart } from '../hooks/useCart.js';
 import { useToast } from '../hooks/useToast.js';
 import { useWishlist } from '../hooks/useWishlist.js';
-import { FREE_SHIPPING_PDP_KES } from '../config/market.js';
+import { useStoreSettings } from '../hooks/useStoreSettings.js';
 import { sizeLabelForType } from '../config/productTypes.js';
 import { formatPrice } from '../utils/format.js';
 
@@ -154,6 +154,7 @@ function ProductPurchase({ product }) {
 export function ProductDetails() {
   const { productId } = useParams();
   const navigate = useNavigate();
+  const { settings } = useStoreSettings();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -245,7 +246,7 @@ export function ProductDetails() {
           <ul className="mt-10 grid gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700">
             <li>
               • Free standard courier on orders over{` `}
-              {formatPrice(FREE_SHIPPING_PDP_KES)} — Kenya mainland
+              {formatPrice(settings.free_shipping_threshold)} — {settings.country} mainland
             </li>
             <li>• 100% authentic pairs sourced for the East Africa wall</li>
             <li>• 14-day Nairobi exchange • 30-day nationwide returns*</li>

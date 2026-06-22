@@ -10,6 +10,7 @@ from models import db, Order, OrderItem, Product, User, Payment, Category, Order
 from sqlalchemy import func, desc, and_, extract
 from datetime import datetime, timedelta
 import calendar
+from utils.analytics_helpers import REVENUE_ORDER_STATUSES, ACTIVE_ORDER_STATUSES, fill_daily_sales
 
 analytics_bp = Blueprint('analytics', __name__)
 
@@ -55,14 +56,15 @@ def get_dashboard_analytics():
         
         # Basic counts
         total_orders = Order.query.filter(
-            Order.order_date >= start_date
+            Order.order_date >= start_date,
+            Order.order_status.in_(ACTIVE_ORDER_STATUSES),
         ).count()
-        
+
         total_revenue = db.session.query(
             func.sum(Order.total_amount)
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES),
         ).scalar() or 0
         
         total_customers = User.query.filter(
@@ -77,26 +79,30 @@ def get_dashboard_analytics():
             func.count(Order.order_id).label('orders'),
             func.sum(Order.total_amount).label('revenue')
         ).filter(
-            Order.order_date >= start_date
+            Order.order_date >= start_date,
+            Order.order_status.in_(ACTIVE_ORDER_STATUSES),
         ).group_by(
             func.date(Order.order_date)
         ).order_by(
             func.date(Order.order_date)
         ).all()
-        
-        sales_data = []
+
+        sales_rows = []
         for item in sales_trend:
-            # Handle both string and datetime objects
             if hasattr(item.date, 'strftime'):
                 date_str = item.date.strftime('%Y-%m-%d')
             else:
                 date_str = str(item.date)
-            
-            sales_data.append({
+            sales_rows.append({
+                'date_key': date_str,
                 'date': date_str,
                 'orders': item.orders,
-                'revenue': float(item.revenue or 0)
+                'revenue': float(item.revenue or 0),
             })
+
+        sales_data = fill_daily_sales(sales_rows, start_date, end_date)
+        for row in sales_data:
+            row['date'] = row.get('date_key', row.get('date', ''))
         
         # Top selling products
         top_products = db.session.query(
@@ -107,7 +113,7 @@ def get_dashboard_analytics():
             func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)).label('total_revenue')
         ).select_from(Product).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(Product.product_id).order_by(
             desc(func.sum(OrderItem.quantity))
         ).limit(10).all()
@@ -129,7 +135,7 @@ def get_dashboard_analytics():
             func.sum(Order.total_amount).label('revenue')
         ).select_from(Category).join(Product, Category.category_id == Product.category_id).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(Category.category_id).order_by(
             desc(func.sum(Order.total_amount))
         ).all()
@@ -142,39 +148,23 @@ def get_dashboard_analytics():
                 'revenue': float(category.revenue or 0)
             })
         
-        # Customer segments - simplified approach without complex case statements
-        high_value_customers = db.session.query(
-            func.count(User.id).label('count')
+        # Customer segments by spend in period
+        customer_totals = db.session.query(
+            User.id,
+            func.sum(Order.total_amount).label('spent'),
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
-        ).group_by(User.id).having(
-            func.sum(Order.total_amount) >= 1000
-        ).count()
-        
-        medium_value_customers = db.session.query(
-            func.count(User.id).label('count')
-        ).join(Order).filter(
-            Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
-        ).group_by(User.id).having(
-            func.sum(Order.total_amount) >= 500,
-            func.sum(Order.total_amount) < 1000
-        ).count()
-        
-        low_value_customers = db.session.query(
-            func.count(User.id).label('count')
-        ).join(Order).filter(
-            Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
-        ).group_by(User.id).having(
-            func.sum(Order.total_amount) < 500
-        ).count()
-        
+            Order.order_status.in_(REVENUE_ORDER_STATUSES),
+        ).group_by(User.id).all()
+
+        high_value_customers = sum(1 for row in customer_totals if float(row.spent or 0) >= 10000)
+        medium_value_customers = sum(1 for row in customer_totals if 5000 <= float(row.spent or 0) < 10000)
+        low_value_customers = sum(1 for row in customer_totals if float(row.spent or 0) < 5000)
+
         segment_data = [
-            {'segment': 'High Value', 'count': high_value_customers},
-            {'segment': 'Medium Value', 'count': medium_value_customers},
-            {'segment': 'Low Value', 'count': low_value_customers}
+            {'segment': 'High Value (10k+)', 'count': high_value_customers},
+            {'segment': 'Medium Value (5k–10k)', 'count': medium_value_customers},
+            {'segment': 'Low Value (<5k)', 'count': low_value_customers},
         ]
         
         return jsonify({
@@ -221,7 +211,7 @@ def get_sales_analytics():
             func.count(Order.order_id).label('orders')
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(
             extract('year', Order.order_date),
             extract('month', Order.order_date)
@@ -283,7 +273,7 @@ def get_sales_analytics():
             func.avg(Order.total_amount).label('avg_order_value')
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(
             func.date(Order.order_date)
         ).order_by(
@@ -355,7 +345,7 @@ def get_customer_analytics():
             func.avg(Order.total_amount).label('avg_order_value')
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(User.id).order_by(
             desc(func.sum(Order.total_amount))
         ).limit(20).all()
@@ -375,7 +365,7 @@ def get_customer_analytics():
             func.count(User.id).label('repeat_customers')
         ).select_from(User).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(User.id).having(
             func.count(Order.order_id) > 1
         ).count()
@@ -384,7 +374,7 @@ def get_customer_analytics():
             func.count(User.id)
         ).select_from(User).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).count()
         
         repeat_rate = (repeat_customers / total_customers * 100) if total_customers > 0 else 0
@@ -425,7 +415,7 @@ def get_product_analytics():
             func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)).label('revenue')
         ).select_from(Category).join(Product, Category.category_id == Product.category_id).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(Category.category_id).order_by(
             desc(func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)))
         ).all()
@@ -433,7 +423,7 @@ def get_product_analytics():
         category_data = []
         for category in category_performance:
             category_data.append({
-                'name': category.name,
+                'name': category.category_name,
                 'product_count': category.product_count,
                 'units_sold': int(category.units_sold or 0),
                 'revenue': float(category.revenue or 0)
@@ -449,7 +439,7 @@ def get_product_analytics():
             func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)).label('revenue')
         ).select_from(Product).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(Product.product_id).order_by(
             desc(func.sum(OrderItem.quantity * func.cast(OrderItem.price, db.Float)))
         ).limit(15).all()
@@ -473,7 +463,7 @@ def get_product_analytics():
             func.sum(OrderItem.quantity).label('sold_quantity')
         ).select_from(Product).join(OrderItem, Product.product_id == OrderItem.product_id).join(Order, OrderItem.order_id == Order.order_id).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(Product.product_id).order_by(
             desc(func.sum(OrderItem.quantity))
         ).limit(20).all()
@@ -523,7 +513,7 @@ def get_financial_analytics():
             func.sum(Order.total_amount).label('revenue')
         ).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(
             func.date(Order.order_date)
         ).order_by(
@@ -564,7 +554,7 @@ def get_financial_analytics():
             func.sum(Payment.payment_amount).label('total_amount')
         ).join(Order).filter(
             Order.order_date >= start_date,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).group_by(Payment.payment_status).all()
         
         payment_data = []
@@ -624,7 +614,7 @@ def get_real_time_analytics():
         ).filter(
             Order.order_date >= today_start,
             Order.order_date <= today_end,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).scalar() or 0
         
         today_customers = User.query.filter(
@@ -641,12 +631,12 @@ def get_real_time_analytics():
             func.sum(Order.total_amount)
         ).filter(
             Order.order_date >= current_month,
-            Order.order_status == OrderStatus.DELIVERED
+            Order.order_status.in_(REVENUE_ORDER_STATUSES)
         ).scalar() or 0
         
         # Pending orders
         pending_orders = Order.query.filter(
-            Order.order_status == 'pending'
+            Order.order_status == OrderStatus.PENDING
         ).count()
         
         # Low stock products

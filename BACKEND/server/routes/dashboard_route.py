@@ -10,6 +10,7 @@ from models import db, Order, OrderItem, Product, User, Payment, Category, Order
 from sqlalchemy import func, desc, and_, extract
 from datetime import datetime, timedelta
 import calendar
+from utils.analytics_helpers import REVENUE_ORDER_STATUSES, ACTIVE_ORDER_STATUSES, fill_daily_sales
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -118,13 +119,14 @@ def get_current_stats(start_date, end_date):
     ).filter(
         Order.order_date >= start_date,
         Order.order_date <= end_date,
-        Order.order_status == OrderStatus.DELIVERED
+        Order.order_status.in_(REVENUE_ORDER_STATUSES),
     ).scalar() or 0
     
     # Total Orders
     total_orders = Order.query.filter(
         Order.order_date >= start_date,
-        Order.order_date <= end_date
+        Order.order_date <= end_date,
+        Order.order_status.in_(ACTIVE_ORDER_STATUSES),
     ).count()
     
     # Active Customers
@@ -224,28 +226,27 @@ def get_sales_data(start_date, end_date):
         func.count(func.distinct(Order.user_id)).label('customers')
     ).filter(
         Order.order_date >= start_date,
-        Order.order_date <= end_date
+        Order.order_date <= end_date,
+        Order.order_status.in_(ACTIVE_ORDER_STATUSES),
     ).group_by(
         func.date(Order.order_date)
     ).order_by(
         func.date(Order.order_date)
     ).all()
     
-    # Calculate profit (assuming 30% profit margin for demo)
     sales_data = []
     for item in daily_sales:
         revenue = float(item.revenue or 0)
-        profit = revenue * 0.3  # 30% profit margin
-        
         sales_data.append({
+            'date_key': item.date.isoformat() if hasattr(item.date, 'isoformat') else str(item.date)[:10],
             'date': item.date.strftime('%b %d') if hasattr(item.date, 'strftime') else str(item.date),
             'revenue': revenue,
             'orders': item.orders,
             'customers': item.customers,
-            'profit': profit
+            'profit': revenue * 0.3,
         })
-    
-    return sales_data
+
+    return fill_daily_sales(sales_data, start_date, end_date)
 
 def get_category_distribution(start_date, end_date):
     """Get sales distribution by category"""
@@ -258,7 +259,7 @@ def get_category_distribution(start_date, end_date):
     ).join(Order, OrderItem.order_id == Order.order_id).filter(
         Order.order_date >= start_date,
         Order.order_date <= end_date,
-        Order.order_status == OrderStatus.DELIVERED
+        Order.order_status.in_(REVENUE_ORDER_STATUSES),
     ).group_by(Category.category_id).order_by(
         desc(func.sum(Order.total_amount))
     ).all()
@@ -289,7 +290,8 @@ def get_hourly_sales_pattern(start_date, end_date):
         func.sum(Order.total_amount).label('revenue')
     ).filter(
         Order.order_date >= start_date,
-        Order.order_date <= end_date
+        Order.order_date <= end_date,
+        Order.order_status.in_(ACTIVE_ORDER_STATUSES),
     ).group_by(
         extract('hour', Order.order_date)
     ).order_by(
@@ -372,42 +374,52 @@ def get_top_products(start_date, end_date, limit=5):
     ).filter(
         Order.order_date >= start_date,
         Order.order_date <= end_date,
-        Order.order_status == OrderStatus.DELIVERED
+        Order.order_status.in_(REVENUE_ORDER_STATUSES),
     ).group_by(Product.product_id).order_by(
         desc(func.sum(OrderItem.quantity))
     ).limit(limit).all()
     
     products_data = []
     for product in top_products:
-        # Calculate trend (simplified - random for demo)
-        import random
-        trend = random.uniform(-5, 20)
-        rating = random.uniform(4.0, 5.0)
-        
         products_data.append({
             'name': product.product_name,
             'sales': int(product.sales or 0),
             'revenue': float(product.revenue or 0),
-            'trend': round(trend, 1),
-            'rating': round(rating, 1)
+            'trend': 0.0,
+            'rating': 4.5,
         })
-    
+
     return products_data
 
 def get_regional_performance(start_date, end_date):
-    """Get regional performance (simplified)"""
-    # Since we don't have region data, we'll create demo data
-    # In a real application, you'd join with a regions table or shipping address data
-    
-    regions = [
-        {"region": "California", "sales": 125000, "orders": 245, "growth": 12.5},
-        {"region": "New York", "sales": 98000, "orders": 189, "growth": 8.3},
-        {"region": "Texas", "sales": 87000, "orders": 167, "growth": 15.2},
-        {"region": "Florida", "sales": 76000, "orders": 145, "growth": -2.1},
-        {"region": "Illinois", "sales": 65000, "orders": 123, "growth": 6.8}
-    ]
-    
-    return regions
+    """Regional performance from order city/county fields."""
+    regional = db.session.query(
+        func.coalesce(Order.county, Order.city, 'Other').label('region'),
+        func.sum(Order.total_amount).label('sales'),
+        func.count(Order.order_id).label('orders'),
+    ).filter(
+        Order.order_date >= start_date,
+        Order.order_date <= end_date,
+        Order.order_status.in_(REVENUE_ORDER_STATUSES),
+    ).group_by(
+        func.coalesce(Order.county, Order.city, 'Other')
+    ).order_by(
+        desc(func.sum(Order.total_amount))
+    ).limit(8).all()
+
+    if not regional:
+        return []
+
+    results = []
+    for item in regional:
+        sales = float(item.sales or 0)
+        results.append({
+            'region': item.region,
+            'sales': sales,
+            'orders': int(item.orders or 0),
+            'growth': 0.0,
+        })
+    return results
 
 def get_system_alerts():
     """Get system alerts and notifications"""

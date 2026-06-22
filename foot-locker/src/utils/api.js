@@ -1,6 +1,7 @@
 import axios, { CanceledError } from 'axios';
 import { mergeCatalogList } from './catalogStorage.js';
 import API_CONFIG from '../config/api.js';
+import { clearAuthStorage } from './authApi.js';
 
 /** @param {AbortSignal | undefined} signal */
 function sleep(ms, signal) {
@@ -83,10 +84,7 @@ api.interceptors.response.use(
         url.includes('/api/related-products') ||
         url.includes('/categories');
       if (!isPublicRead) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+        clearAuthStorage();
       }
     }
     return Promise.reject(error);
@@ -292,6 +290,21 @@ export async function deleteProduct(productId, opts = {}) {
 }
 
 /**
+ * Gemini vision: suggest product fields from a photo (admin)
+ * @param {File} imageFile
+ * @param {{ hint?: string, signal?: AbortSignal }} [opts]
+ */
+export async function fetchProductAiSuggest(imageFile, opts = {}) {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  if (opts.hint) formData.append('hint', opts.hint);
+  const res = await api.post('/api/admin/products/ai-suggest', formData, {
+    signal: opts.signal,
+  });
+  return res.data;
+}
+
+/**
  * Upload product image (admin)
  * @param {number} productId
  * @param {File} imageFile
@@ -426,6 +439,36 @@ export async function exportAdminReport(type = 'sales', days = 30, opts = {}) {
     console.error(`Failed to export admin report of type ${type}:`, error);
     throw error;
   }
+}
+
+/** @param {number} days @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchReportsDashboard(days = 30, opts = {}) {
+  const res = await api.get('/reports/admin/reports/dashboard', { params: { days }, signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} days @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchSalesReport(days = 30, opts = {}) {
+  const res = await api.get('/reports/admin/reports/sales', { params: { days }, signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} days @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchInventoryReport(days = 30, opts = {}) {
+  const res = await api.get('/reports/admin/reports/inventory', { params: { days }, signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} days @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchCustomerReport(days = 30, opts = {}) {
+  const res = await api.get('/reports/admin/reports/customers', { params: { days }, signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} days @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchFinancialReport(days = 30, opts = {}) {
+  const res = await api.get('/reports/admin/reports/financial', { params: { days }, signal: opts.signal });
+  return res.data;
 }
 
 /**
@@ -602,5 +645,88 @@ export async function fetchAdminSettings(opts = {}) {
  */
 export async function bulkUpdateSettings(updates, opts = {}) {
   const res = await api.put('/settings/admin/settings/bulk-update', { updates }, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchStoreSettings(opts = {}) {
+  const res = await api.get('/settings/store', { signal: opts.signal });
+  return res.data?.settings || {};
+}
+
+/** @param {string} [couponCode] @param {{ signal?: AbortSignal }} [opts] */
+export async function previewCheckout(couponCode, opts = {}) {
+  const res = await api.post(
+    '/orders/checkout/preview',
+    couponCode ? { coupon_code: couponCode } : {},
+    { signal: opts.signal },
+  );
+  return res.data;
+}
+
+/** @param {number} orderId @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchMyOrder(orderId, opts = {}) {
+  const res = await api.get(`/orders/me/${orderId}`, { signal: opts.signal });
+  return res.data?.order;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchProfile(opts = {}) {
+  const res = await api.get('/auth/me', { signal: opts.signal });
+  return res.data?.user;
+}
+
+/**
+ * @param {{ first_name?: string, last_name?: string, phone?: string, address?: string, password?: string }} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function updateProfile(payload, opts = {}) {
+  const res = await api.put('/auth/me', payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchSavedAddresses(opts = {}) {
+  const res = await api.get('/shipping/get', { signal: opts.signal });
+  return res.data?.shipping_infos || [];
+}
+
+/** @param {Record<string, unknown>} payload @param {{ signal?: AbortSignal }} [opts] */
+export async function saveAddress(payload, opts = {}) {
+  const res = await api.post('/shipping/save', payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} addressId @param {{ signal?: AbortSignal }} [opts] */
+export async function deleteAddress(addressId, opts = {}) {
+  const res = await api.delete(`/shipping/delete/${addressId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {string} email @param {{ signal?: AbortSignal }} [opts] */
+export async function subscribeNewsletter(email, opts = {}) {
+  const res = await api.post('/newsletter/subscribe', { email }, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} productId @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchProductReviews(productId, opts = {}) {
+  const res = await api.get(`/reviews/product/${productId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/**
+ * @param {number} productId
+ * @param {{ rating: number, review_text: string }} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function submitProductReview(productId, payload, opts = {}) {
+  const res = await api.post(`/reviews/product/${productId}`, payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} orderId @param {string} reason @param {{ signal?: AbortSignal }} [opts] */
+export async function requestOrderReturn(orderId, reason, opts = {}) {
+  const res = await api.post(`/orders/${orderId}/return`, { reason }, { signal: opts.signal });
   return res.data;
 }

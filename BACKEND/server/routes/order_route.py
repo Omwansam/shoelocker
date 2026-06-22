@@ -2,10 +2,10 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify
 from extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
-from models import (ShoppingCart, CartItem, Order, OrderItem, Product, 
-                   User, OrderStatus, ShippingStatus, DiscountType, 
+from models import (ShoppingCart, CartItem, Order, OrderItem, Product,
+                   User, OrderStatus, ShippingStatus, DiscountType,
                    ProductImage, Payment, PaymentStatus, RefundStatus, Refund, Coupon,
-                   PaymentMethod)
+                   PaymentMethod, Settings)
 from sqlalchemy.exc import SQLAlchemyError
 
 order_bp = Blueprint('order', __name__)
@@ -59,6 +59,42 @@ def get_my_orders():
     return jsonify({"orders": out}), 200
 
 
+@order_bp.route('/me/<int:order_id>', methods=['GET'])
+@jwt_required()
+def get_my_order_detail(order_id):
+    """Single order detail for the authenticated customer."""
+    user_id = _extract_user_id(get_jwt_identity())
+    if not user_id:
+        return jsonify({"error": "Invalid user"}), 401
+    order = Order.query.filter_by(order_id=order_id, user_id=user_id).first()
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    return jsonify({"order": _serialize_customer_order(order)}), 200
+
+
+@order_bp.route('/checkout/preview', methods=['POST'])
+@jwt_required()
+def checkout_preview():
+    """Preview checkout totals without placing an order."""
+    user_id = _extract_user_id(get_jwt_identity())
+    data = request.get_json() or {}
+    cart = ShoppingCart.query.filter_by(user_id=user_id).first()
+    if not cart or not cart.cart_items:
+        return jsonify({"error": "Your cart is empty"}), 400
+    coupon_code = data.get('coupon_code')
+    totals, error = _compute_checkout_totals(cart, coupon_code)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify({
+        "subtotal": f"{totals['subtotal']:.2f}",
+        "shipping_cost": f"{totals['shipping_cost']:.2f}",
+        "discount": f"{totals['discount']:.2f}",
+        "total_amount": f"{totals['total_amount']:.2f}",
+        "free_shipping_threshold": totals['free_shipping_threshold'],
+        "item_count": len(cart.cart_items),
+    }), 200
+
+
 def is_admin():
     """Check if current user is admin"""
     try:
@@ -88,12 +124,138 @@ def _get_or_create_payment_method(user_id, method_name='pay_on_delivery'):
     return pm.payment_method_id
 
 
-def calculate_shipping_cost(items, address):
-    """Calculate shipping cost based on items and address"""
-    # Simplified calculation - in reality would use shipping API
-    base_cost = 5.00  # base shipping
-    per_item = 1.50   # per item cost
-    return f"{base_cost + (per_item * len(items)):.2f}"
+def _get_store_setting(key, default):
+    setting = Settings.query.filter_by(setting_key=key).first()
+    if setting:
+        return setting.get_value()
+    return default
+
+
+def _payment_method_allowed(method):
+    """Check admin payment toggles before accepting checkout."""
+    normalized = (method or 'pay_on_delivery').lower()
+    if normalized in ('mpesa', 'mpesa_stk'):
+        enabled = _get_store_setting('mpesa_enabled', True)
+        if not enabled:
+            return False, 'M-Pesa payments are not available right now'
+    elif normalized in ('pay_on_delivery', 'cod', 'cash_on_delivery'):
+        enabled = _get_store_setting('cod_enabled', True)
+        if not enabled:
+            return False, 'Cash on delivery is not available right now'
+    return True, None
+
+
+def _maybe_send_order_confirmation(order):
+    """Send or log order confirmation when enabled in store settings."""
+    from flask import current_app
+
+    if not _get_store_setting('order_confirmation_email', True):
+        return
+
+    email = order.customer_email
+    if not email and order.user_id:
+        user = User.query.get(order.user_id)
+        email = user.email if user else None
+    if not email:
+        return
+
+    support = _get_store_setting('support_email', 'hello@shoelocker.ke')
+    subject = f'Order #{order.order_id} confirmed — ShoeLocker'
+    body = (
+        f'Thank you for your order.\n\n'
+        f'Order ID: {order.order_id}\n'
+        f'Total: KES {order.total_amount}\n\n'
+        f'Questions? Contact {support}'
+    )
+    current_app.logger.info(
+        'Order confirmation for order %s → %s: %s',
+        order.order_id,
+        email,
+        subject,
+    )
+    try:
+        from utils.order_email import send_store_email
+        send_store_email(email, subject, body)
+    except Exception as exc:
+        current_app.logger.warning('Order confirmation email failed: %s', exc)
+
+
+def calculate_shipping_cost(items, subtotal):
+    """Calculate shipping in KES; free above store threshold."""
+    try:
+        free_threshold = float(_get_store_setting('free_shipping_threshold', 12000))
+    except (TypeError, ValueError):
+        free_threshold = 12000.0
+    try:
+        subtotal_val = float(subtotal or 0)
+    except (TypeError, ValueError):
+        subtotal_val = 0.0
+    if subtotal_val >= free_threshold:
+        return 0.0
+    base_cost = 350.0
+    per_item = 150.0
+    return round(base_cost + (per_item * len(items or [])), 2)
+
+
+def _compute_checkout_totals(cart, coupon_code=None):
+    """Shared subtotal/shipping/discount/total calculation for preview and checkout."""
+    try:
+        subtotal_val = float(cart.total_price or 0)
+    except Exception:
+        subtotal_val = 0.0
+    if subtotal_val <= 0:
+        subtotal_val = sum(float(ci.price) * ci.quantity for ci in cart.cart_items)
+    subtotal = round(float(subtotal_val), 2)
+    shipping_cost = calculate_shipping_cost(cart.cart_items, subtotal)
+    discount = 0.0
+    if coupon_code:
+        coupon_discount, message = apply_coupon(coupon_code, subtotal)
+        if coupon_discount is None:
+            return None, message
+        discount = float(coupon_discount)
+    total_amount = round(subtotal + shipping_cost - discount, 2)
+    return {
+        'subtotal': subtotal,
+        'shipping_cost': shipping_cost,
+        'discount': discount,
+        'total_amount': total_amount,
+        'free_shipping_threshold': _get_store_setting('free_shipping_threshold', 12000),
+    }, None
+
+
+def _serialize_order_item(oi):
+    prod = oi.product
+    return {
+        'order_item_id': oi.order_item_id,
+        'product_id': oi.product_id,
+        'name': oi.product_name_snapshot or (prod.product_name if prod else ''),
+        'brand': oi.product_brand_snapshot or (prod.brand if prod else ''),
+        'quantity': oi.quantity,
+        'price': float(oi.price) if oi.price is not None else 0,
+        'size': oi.size,
+        'shipping_status': oi.shipping_status.value if oi.shipping_status else None,
+    }
+
+
+def _serialize_customer_order(order, include_items=True):
+    payment = order.payment
+    refund = Refund.query.filter_by(order_id=order.order_id).first()
+    payload = {
+        'order_id': order.order_id,
+        'id': f'ORD-{order.order_id}',
+        'date': order.order_date.isoformat() if order.order_date else None,
+        'status': order.order_status.value if order.order_status else None,
+        'total': float(order.total_amount) if order.total_amount is not None else 0,
+        'shipping_address': order.shipping_address,
+        'courier': order.courier,
+        'payment_method': order.payment_method_label,
+        'payment_status': payment.payment_status.value if payment and payment.payment_status else None,
+        'mpesa_ref': order.mpesa_ref,
+        'return_status': refund.status.value if refund else None,
+    }
+    if include_items:
+        payload['items'] = [_serialize_order_item(oi) for oi in (order.order_items or [])]
+    return payload
 
 def apply_coupon(coupon_code, order_amount):
     """Apply coupon discount to order amount"""
@@ -164,34 +326,34 @@ def checkout():
         }), 400
     
     try:
-        # Calculate subtotal (fallback if cart.total_price is missing or zero)
-        try:
-            subtotal_val = float(cart.total_price or 0)
-        except Exception:
-            subtotal_val = 0.0
-        if subtotal_val <= 0:
-            subtotal_val = sum(float(ci.price) * ci.quantity for ci in cart.cart_items)
-        subtotal = float(f"{subtotal_val:.2f}")
-        shipping_cost = calculate_shipping_cost(cart.cart_items, data['shipping_address'])
-        discount = 0.0
         coupon_code = data.get('coupon_code')
-        
-        # Apply coupon if provided
-        if coupon_code:
-            coupon_discount, message = apply_coupon(coupon_code, subtotal)
-            if coupon_discount is None:
-                return jsonify({"error": message}), 400
-            discount = coupon_discount
-        
-        # Calculate total
-        total_amount = subtotal + float(shipping_cost) - discount
-        
+        totals, message = _compute_checkout_totals(cart, coupon_code)
+        if message:
+            return jsonify({"error": message}), 400
+        subtotal = totals['subtotal']
+        shipping_cost = totals['shipping_cost']
+        discount = totals['discount']
+        total_amount = totals['total_amount']
+
         # Create order
+        payment_method = data.get('payment_method', 'pay_on_delivery')
+        allowed, pay_error = _payment_method_allowed(payment_method)
+        if not allowed:
+            return jsonify({"error": pay_error}), 400
+
         new_order = Order(
             user_id=user_id,
             total_amount=total_amount,
+            total_kes=total_amount,
             order_status=OrderStatus.PENDING,
-            shipping_address=data['shipping_address']
+            status=OrderStatus.PENDING,
+            shipping_address=data['shipping_address'],
+            customer_name=data.get('customer_name'),
+            customer_phone=data.get('customer_phone'),
+            customer_email=data.get('customer_email'),
+            city=data.get('city'),
+            county=data.get('county'),
+            payment_method_label=payment_method,
         )
         db.session.add(new_order)
         db.session.flush()
@@ -208,7 +370,7 @@ def checkout():
                 size=cart_item.size,
                 product_name_snapshot=cart_item.product_name_snapshot or product.product_name,
                 product_brand_snapshot=cart_item.product_brand_snapshot or product.brand,
-                shipping_cost=shipping_cost,
+                shipping_cost=f"{shipping_cost:.2f}",
                 tax="0.00",
                 discount=str(discount),
                 discount_type=DiscountType.COUPON if coupon_code else DiscountType.REGULAR,
@@ -219,15 +381,14 @@ def checkout():
             # Update inventory
             product.stock_quantity -= cart_item.quantity
         
-        # Process payment
-        # Create payment to match current Payment model schema
-        payment_method = data.get('payment_method', 'mpesa')
-        
-        # Set payment status based on payment method
-        if payment_method == 'mpesa':
-            payment_status = PaymentStatus.PENDING  # Will be updated when payment is confirmed
+        # Process payment — online methods stay pending until confirmed
+        if payment_method in ('mpesa', 'mpesa_stk', 'stripe'):
+            payment_status = PaymentStatus.PENDING
+        elif payment_method == 'pay_on_delivery':
+            payment_status = PaymentStatus.PENDING
         else:
-            payment_status = PaymentStatus.COMPLETED  # For bank transfer, mark as completed
+            payment_status = PaymentStatus.COMPLETED
+        new_order.payment_status = payment_status
             
         payment_method_id = _get_or_create_payment_method(user_id, payment_method)
         payment = Payment(
@@ -255,12 +416,14 @@ def checkout():
                     coupon.is_active = False
         
         db.session.commit()
+
+        _maybe_send_order_confirmation(new_order)
         
         return jsonify({
             "message": "Order placed successfully",
             "order_id": new_order.order_id,
             "subtotal": f"{subtotal:.2f}",
-            "shipping_cost": shipping_cost,
+            "shipping_cost": f"{shipping_cost:.2f}",
             "discount": f"{discount:.2f}",
             "total_amount": f"{total_amount:.2f}",
             "coupon_applied": bool(coupon_code),
@@ -312,15 +475,6 @@ def request_return(order_id):
         )
         db.session.add(refund)
         
-        # If specific items are specified, add them to return
-        if 'items' in data:
-            for item_data in data['items']:
-                item = next((i for i in order.order_items 
-                           if i.order_item_id == item_data['order_item_id']), None)
-                if item:
-                    item.refund_requested = True
-                    item.refund_reason = item_data.get('reason', '')
-        
         db.session.commit()
         
         return jsonify({
@@ -361,19 +515,16 @@ def process_return(return_id):
             refund.processed_at = db.func.current_timestamp()
             refund.admin_notes = data.get('notes', '')
             
-            # Process refund payment
             order = refund.order
             if order.payment:
-                order.payment.status = PaymentStatus.REFUNDED
-                order.payment.refund_date = db.func.current_timestamp()
-            
-            # Restock items if applicable
+                order.payment.payment_status = PaymentStatus.REFUNDED
+            order.payment_status = PaymentStatus.REFUNDED
+
             if data.get('restock', True):
                 for item in order.order_items:
-                    if item.refund_requested:
-                        product = Product.query.get(item.product_id)
-                        if product:
-                            product.stock_quantity += item.quantity
+                    product = Product.query.get(item.product_id)
+                    if product:
+                        product.stock_quantity = int(product.stock_quantity or 0) + item.quantity
             
             # Update order status
             order.order_status = OrderStatus.RETURNED
