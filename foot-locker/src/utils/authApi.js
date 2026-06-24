@@ -1,5 +1,6 @@
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/+$/, '');
+import API_CONFIG from '../config/api.js';
+
+const API_BASE_URL = API_CONFIG.baseURL.replace(/\/+$/, '');
 
 function notifyAuthChange() {
   try {
@@ -113,5 +114,43 @@ export async function registerRequest(input) {
   });
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(toErrorMessage(payload, 'Registration failed'));
+  return payload;
+}
+
+/** @param {string} email */
+export async function forgotPasswordRequest(email) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+  } catch {
+    throw new Error(
+      `Could not reach the server at ${API_BASE_URL}. Make sure the backend is running.`,
+    );
+  }
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(toErrorMessage(payload, 'Could not send reset link'));
+  return payload;
+}
+
+/** @param {{ token: string, password: string }} input */
+export async function resetPasswordRequest(input) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    throw new Error(
+      `Could not reach the server at ${API_BASE_URL}. Make sure the backend is running.`,
+    );
+  }
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(toErrorMessage(payload, 'Could not reset password'));
   return payload;
 }

@@ -10,61 +10,71 @@ import { useWishlist } from '../hooks/useWishlist.js';
 import { useStoreSettings } from '../hooks/useStoreSettings.js';
 import { sizeLabelForType } from '../config/productTypes.js';
 import { formatPrice } from '../utils/format.js';
+import { FALLBACK_PRODUCT_IMAGE, productDisplayImage } from '../utils/productImages.js';
 
 /**
- * @typedef {import('../data/products.js').products extends (infer P)[] ? P : never} Product
+ * @typedef {import('../types/product.js').Product} Product
  */
 
 /** @param {{ product: Product }} props */
 function ProductMedia({ product }) {
-  const gallery = product.gallery ?? [product.image];
+  const rawGallery = product.gallery?.length ? product.gallery : [product.image];
+  const gallery = rawGallery.map((src) => productDisplayImage(src)).filter(Boolean);
+  const images = gallery.length ? gallery : [FALLBACK_PRODUCT_IMAGE];
   const [activeIdx, setActiveIdx] = useState(0);
-  const hero = gallery[Math.min(activeIdx, gallery.length - 1)];
+  const [heroSrc, setHeroSrc] = useState(images[0]);
+  const hero = images[Math.min(activeIdx, images.length - 1)];
+
+  useEffect(() => {
+    setHeroSrc(hero);
+  }, [hero]);
 
   return (
     <div className="space-y-4">
       <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-[var(--shadow-card)]">
         <img
-          src={hero}
+          src={heroSrc}
           alt={`${product.brand} ${product.name}`}
           className="aspect-square w-full object-cover transition duration-500"
           decoding="async"
           sizes="(max-width: 1024px) 100vw, 50vw"
+          onError={() => setHeroSrc(FALLBACK_PRODUCT_IMAGE)}
         />
       </div>
-      {gallery.length > 1 ? (
-        <div
-          className="flex gap-2 overflow-x-auto pb-1"
-          role="tablist"
-          aria-label="Product gallery"
-        >
-          {gallery.map((src, idx) => (
-            <button
-              key={src}
-              type="button"
-              role="tab"
-              aria-selected={idx === activeIdx}
-              aria-label={`View image ${idx + 1}`}
-              onClick={() => setActiveIdx(idx)}
-              className={`shrink-0 overflow-hidden rounded-xl border-2 transition ${
-                idx === activeIdx
-                  ? 'border-black ring-2 ring-black/15'
-                  : 'border-transparent opacity-70 hover:opacity-100'
-              }`}
-            >
-              <img
-                src={src}
-                alt=""
-                width={88}
-                height={88}
-                className="h-20 w-20 object-cover"
-                loading="lazy"
-                decoding="async"
-              />
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div
+        className="flex gap-2 overflow-x-auto pb-1"
+        role="tablist"
+        aria-label="Product gallery"
+      >
+        {images.map((src, idx) => (
+          <button
+            key={`${src}-${idx}`}
+            type="button"
+            role="tab"
+            aria-selected={idx === activeIdx}
+            aria-label={`View image ${idx + 1}`}
+            onClick={() => setActiveIdx(idx)}
+            className={`shrink-0 overflow-hidden rounded-xl border-2 transition ${
+              idx === activeIdx
+                ? 'border-black ring-2 ring-black/15'
+                : 'border-transparent opacity-70 hover:opacity-100'
+            }`}
+          >
+            <img
+              src={src}
+              alt=""
+              width={88}
+              height={88}
+              className="h-20 w-20 object-cover"
+              loading="lazy"
+              decoding="async"
+              onError={(e) => {
+                e.currentTarget.src = FALLBACK_PRODUCT_IMAGE;
+              }}
+            />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

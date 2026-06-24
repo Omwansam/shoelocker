@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FreeShippingNote } from './FreeShippingNote.jsx';
 import { useCart } from '../hooks/useCart.js';
-import { mergeCatalogList } from '../utils/catalogStorage.js';
+import { fetchRecentProducts } from '../utils/api.js';
 import { formatPrice } from '../utils/format.js';
 
 export function CartDrawer() {
@@ -18,11 +18,20 @@ export function CartDrawer() {
   } = useCart();
   const panelRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const lastFocus = useRef(/** @type {HTMLElement | null} */ (null));
+  const [suggestions, setSuggestions] = useState(/** @type {any[]} */ ([]));
 
-  const suggestions = useMemo(() => {
-    const inCart = new Set(items.map((i) => i.productId));
-    return mergeCatalogList().filter((p) => !inCart.has(p.id)).slice(0, 4);
-  }, [items]);
+  const inCartIds = useMemo(() => new Set(items.map((i) => i.productId)), [items]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const ac = new AbortController();
+    fetchRecentProducts({ limit: 12, signal: ac.signal, throwOnError: true })
+      .then((list) =>
+        setSuggestions(list.filter((p) => !inCartIds.has(p.id)).slice(0, 4)),
+      )
+      .catch(() => setSuggestions([]));
+    return () => ac.abort();
+  }, [drawerOpen, inCartIds]);
 
   useEffect(() => {
     if (!drawerOpen) return;

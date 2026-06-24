@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { LogoMark } from '../components/LogoMark.jsx';
+import { AdminLogo } from '../components/admin/AdminLogo.jsx';
 import { AdminIcon } from '../components/admin/AdminIcons.jsx';
+import { ADMIN_CONSOLE_NAME, ADMIN_POWERED_BY } from '../config/adminBrand.js';
 import { ADMIN_NAV_SECTIONS, ADMIN_ROUTE_TITLES } from '../components/admin/adminNav.js';
 import { useAdminAuth } from '../hooks/useAdminAuth.js';
-import { useAdminInventory } from '../hooks/useAdminInventory.js';
-import { fetchAdminOrders } from '../utils/api.js';
+import { fetchAdminOrders, fetchProducts } from '../utils/api.js';
+import { DeveloperCredit } from '../components/DeveloperCredit.jsx';
 
 function initialsFromEmail(email) {
   const local = String(email || 'A').split('@')[0] || 'A';
@@ -17,7 +18,7 @@ function useBreadcrumbs() {
   return useMemo(() => {
     const parts = pathname.replace(/^\/admin\/?/, '').split('/').filter(Boolean);
     if (!parts.length) return [{ label: 'Dashboard', to: '/admin/dashboard' }];
-    const crumbs = [{ label: 'Admin', to: '/admin/dashboard' }];
+    const crumbs = [{ label: ADMIN_CONSOLE_NAME, to: '/admin/dashboard' }];
     let path = '/admin';
     for (let i = 0; i < parts.length; i += 1) {
       const part = parts[i];
@@ -35,19 +36,28 @@ function useBreadcrumbs() {
 
 export function AdminLayout() {
   const { session, logout } = useAdminAuth();
-  const { lowStockProducts } = useAdminInventory();
   const [mobileNav, setMobileNav] = useState(false);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
+  const [lowStockCount, setLowStockCount] = useState(0);
   const breadcrumbs = useBreadcrumbs();
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
-        const data = await fetchAdminOrders({ status: 'pending', per_page: 1 });
-        if (active) setPendingOrderCount(Number(data?.pagination?.total || 0));
+        const [ordersData, products] = await Promise.all([
+          fetchAdminOrders({ status: 'pending', per_page: 1 }),
+          fetchProducts({ perPage: 500 }),
+        ]);
+        if (!active) return;
+        setPendingOrderCount(Number(ordersData?.pagination?.total || 0));
+        const low = (products || []).filter((p) => Number(p.stock_quantity ?? 0) <= 8).length;
+        setLowStockCount(low);
       } catch {
-        if (active) setPendingOrderCount(0);
+        if (active) {
+          setPendingOrderCount(0);
+          setLowStockCount(0);
+        }
       }
     }
     void load();
@@ -58,7 +68,7 @@ export function AdminLayout() {
 
   const badges = {
     pendingOrders: pendingOrderCount,
-    lowStock: lowStockProducts.length,
+    lowStock: lowStockCount,
   };
 
   return (
@@ -73,9 +83,13 @@ export function AdminLayout() {
         <div className="relative border-b border-white/[0.06] px-5 py-5">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-brand-red/20 to-transparent" />
           <div className="relative flex items-center justify-between gap-3">
-            <Link to="/admin/dashboard" className="min-w-0 no-underline" onClick={() => setMobileNav(false)}>
-              <LogoMark to="" variant="invert" compact className="min-w-0" />
-            </Link>
+            <AdminLogo
+              to="/admin/dashboard"
+              compact
+              showTagline={false}
+              className="min-w-0"
+              onNavigate={() => setMobileNav(false)}
+            />
             <button
               type="button"
               className="rounded-lg p-2 text-neutral-400 transition hover:bg-white/10 hover:text-white lg:hidden"
@@ -88,7 +102,7 @@ export function AdminLayout() {
             </button>
           </div>
           <p className="relative mt-3 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-500">
-            Operations console
+            {ADMIN_POWERED_BY} · ops
           </p>
         </div>
 
@@ -153,6 +167,7 @@ export function AdminLayout() {
               <p className="truncate text-xs text-neutral-500">{session?.email}</p>
             </div>
           </div>
+          <DeveloperCredit variant="dark" className="mt-3 px-1" />
         </div>
       </aside>
 
@@ -206,7 +221,7 @@ export function AdminLayout() {
                 className="hidden items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-xs font-semibold text-neutral-700 transition hover:bg-neutral-50 sm:inline-flex"
               >
                 <AdminIcon name="storefront" className="size-4" />
-                Storefront
+                {ADMIN_POWERED_BY} store
               </Link>
               <button
                 type="button"
@@ -222,6 +237,10 @@ export function AdminLayout() {
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">
           <Outlet />
         </main>
+
+        <footer className="border-t border-neutral-200/80 bg-white/60 px-4 py-4 sm:px-6">
+          <DeveloperCredit variant="compact" className="text-center sm:text-left" />
+        </footer>
       </div>
     </div>
   );

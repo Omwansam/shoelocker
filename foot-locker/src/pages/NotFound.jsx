@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { DeveloperCredit } from '../components/DeveloperCredit.jsx';
 
 export function NotFound() {
   return (
@@ -29,6 +30,7 @@ export function NotFound() {
           Support
         </Link>
       </div>
+      <DeveloperCredit variant="muted" className="mt-12" />
     </div>
   );
 }

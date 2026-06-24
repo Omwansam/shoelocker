@@ -26,15 +26,23 @@ export const ADMIN_NAV_SECTIONS = [
       { to: '/admin/products', label: 'Products', icon: 'products', badgeKey: 'lowStock' },
       { to: '/admin/customers', label: 'Customers', icon: 'customers' },
       { to: '/admin/promotions', label: 'Promotions', icon: 'promotions' },
+      { to: '/admin/suppliers', label: 'Suppliers', icon: 'suppliers' },
     ],
   },
   {
-    section: 'Insights',
-    items: [{ to: '/admin/reports', label: 'Reports', icon: 'reports' }],
+    section: 'Growth',
+    items: [
+      { to: '/admin/content', label: 'Content', icon: 'content' },
+      { to: '/admin/brands', label: 'Brand wall', icon: 'products' },
+      { to: '/admin/reports', label: 'Reports', icon: 'reports' },
+    ],
   },
   {
     section: 'System',
-    items: [{ to: '/admin/settings', label: 'Settings', icon: 'settings' }],
+    items: [
+      { to: '/admin/team', label: 'Team', icon: 'team' },
+      { to: '/admin/settings', label: 'Settings', icon: 'settings' },
+    ],
   },
 ];
 
@@ -46,7 +54,11 @@ export const ADMIN_ROUTE_TITLES = {
   products: 'Products',
   customers: 'Customers',
   promotions: 'Promotions',
+  suppliers: 'Suppliers',
+  content: 'Content',
+  brands: 'Brand wall',
   reports: 'Reports',
+  team: 'Team',
   settings: 'Settings',
   new: 'New product',
   edit: 'Edit product',

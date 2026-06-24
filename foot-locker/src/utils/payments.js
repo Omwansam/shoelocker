@@ -14,15 +14,26 @@ export function normalizeKenyaPhone(phone) {
  * @param {{ signal?: AbortSignal }} [opts]
  */
 export async function initiateMpesaPayment(payload, opts = {}) {
-  const res = await api.post(
-    '/payments/mpesa/stkpush',
-    {
-      ...payload,
-      phone_number: normalizeKenyaPhone(payload.phone_number),
-    },
-    { signal: opts.signal },
-  );
-  return res.data;
+  try {
+    const res = await api.post(
+      '/payments/mpesa/stkpush',
+      {
+        ...payload,
+        phone_number: normalizeKenyaPhone(payload.phone_number),
+      },
+      { signal: opts.signal },
+    );
+    return res.data;
+  } catch (err) {
+    const apiError = err?.response?.data?.error;
+    throw new Error(
+      typeof apiError === 'string' && apiError
+        ? apiError
+        : err instanceof Error
+          ? err.message
+          : 'Could not start M-Pesa payment',
+    );
+  }
 }
 
 /**

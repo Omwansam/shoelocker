@@ -11,6 +11,7 @@ import { AdminCard } from '../../components/admin/ui/AdminCard.jsx';
 import { AdminButton } from '../../components/admin/ui/AdminButton.jsx';
 import { AdminLoading } from '../../components/admin/ui/AdminLoading.jsx';
 import { AdminTable, AdminTableHead, AdminTableBody, AdminTh, AdminTd } from '../../components/admin/ui/AdminTable.jsx';
+import { ADMIN_CONSOLE_NAME } from '../../config/adminBrand.js';
 import { fetchAdminDashboardOverview, fetchProducts } from '../../utils/api.js';
 
 export function AdminDashboard() {
@@ -130,7 +131,7 @@ export function AdminDashboard() {
     <AdminPage className="space-y-8">
       <AdminPageHeader
         title="Dashboard"
-        description="Live revenue, orders, and inventory health across your Kenya storefront."
+        description={`${ADMIN_CONSOLE_NAME} command center — live revenue, orders, and inventory for ShoeLocker.`}
         badge={
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-800">
             <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -138,14 +139,39 @@ export function AdminDashboard() {
           </span>
         }
         actions={
-          <Link
-            to="/admin/orders"
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
-          >
-            View orders
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/admin/team"
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+            >
+              Team
+            </Link>
+            <Link
+              to="/admin/orders"
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-neutral-950 px-4 text-sm font-semibold text-white transition hover:bg-neutral-800"
+            >
+              View orders
+            </Link>
+          </div>
         }
       />
+
+      <div className="flex flex-wrap gap-2">
+        {[
+          ['/admin/products', 'Products'],
+          ['/admin/suppliers', 'Suppliers'],
+          ['/admin/content', 'Content'],
+          ['/admin/settings', 'Settings'],
+        ].map(([to, label]) => (
+          <Link
+            key={to}
+            to={to}
+            className="rounded-full border border-neutral-200 bg-white px-4 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-brand-red/30 hover:text-brand-red"
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

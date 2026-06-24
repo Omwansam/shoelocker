@@ -11,7 +11,7 @@ import {
 } from '../utils/api.js';
 
 /**
- * @typedef {import('../data/products.js').products extends (infer P)[] ? P : never} Product
+ * @typedef {import('../types/product.js').Product} Product
  */
 
 /**

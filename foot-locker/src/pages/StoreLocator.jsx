@@ -1,66 +1,36 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SearchBar } from '../components/SearchBar.jsx';
-
-const STORES = [
-  {
-    id: '1',
-    name: 'ShoeLocker Two Rivers',
-    street: 'Two Rivers Mall, Limuru Road',
-    city: 'Nairobi',
-    county: 'Nairobi',
-    postcode: '00619',
-    phone: '+254 722 555 014',
-  },
-  {
-    id: '2',
-    name: 'ShoeLocker Sarit Centre',
-    street: 'Sarit Centre, Westlands',
-    city: 'Nairobi',
-    county: 'Nairobi',
-    postcode: '00623',
-    phone: '+254 733 555 018',
-  },
-  {
-    id: '3',
-    name: 'ShoeLocker Nyali',
-    street: 'Nyali Road, near City Mall',
-    city: 'Mombasa',
-    county: 'Mombasa',
-    postcode: '80100',
-    phone: '+254 711 555 021',
-  },
-  {
-    id: '4',
-    name: 'ShoeLocker Mega City',
-    street: 'Mega City Mall, Oginga Odinga Rd',
-    city: 'Kisumu',
-    county: 'Kisumu',
-    postcode: '40100',
-    phone: '+254 725 555 009',
-  },
-  {
-    id: '5',
-    name: 'ShoeLocker Nakuru Westside',
-    street: 'Westside Mall, Kenyatta Ave',
-    city: 'Nakuru',
-    county: 'Nakuru',
-    postcode: '20100',
-    phone: '+254 700 555 033',
-  },
-];
+import { fetchStores } from '../utils/api.js';
 
 export function StoreLocator() {
   const [query, setQuery] = useState('');
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(/** @type {string | null} */ (null));
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setLoading(true);
+    setError(null);
+    fetchStores({ signal: ac.signal })
+      .then((list) => setStores(list))
+      .catch((e) => {
+        if (e?.code === 'ERR_CANCELED') return;
+        setError('Could not load store branches. Please try again.');
+      })
+      .finally(() => setLoading(false));
+    return () => ac.abort();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return STORES;
-    return STORES.filter((s) => {
-      const blob = `${s.name} ${s.street} ${s.city} ${s.county} ${s.postcode} ${s.phone}`;
+    if (!q) return stores;
+    return stores.filter((s) => {
+      const blob = `${s.name} ${s.street} ${s.city} ${s.county} ${s.postcode ?? ''} ${s.phone ?? ''}`;
       return blob.toLowerCase().includes(q);
     });
-  }, [query]);
+  }, [query, stores]);
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-12 sm:px-6 lg:px-8">
@@ -91,9 +61,22 @@ export function StoreLocator() {
       </div>
 
       <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.length === 0 ? (
+        {loading ? (
+          Array.from({ length: 6 }).map((_, i) => (
+            <li
+              key={i}
+              className="h-52 animate-pulse rounded-2xl border border-neutral-200 bg-neutral-100"
+            />
+          ))
+        ) : error ? (
           <li className="col-span-full rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-16 text-center text-neutral-600">
-            Hakuna branches matching &ldquo;{query}&rdquo;. Try another town or estate.
+            {error}
+          </li>
+        ) : filtered.length === 0 ? (
+          <li className="col-span-full rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-16 text-center text-neutral-600">
+            {query
+              ? `Hakuna branches matching “${query}”. Try another town or estate.`
+              : 'No branches are listed yet. Check back soon.'}
           </li>
         ) : (
           filtered.map((s) => (
@@ -112,13 +95,23 @@ export function StoreLocator() {
                 <br />
                 {s.city} {s.postcode}
               </p>
-              <a
-                href={`tel:${s.phone.replace(/\s/g, '')}`}
-                className="mt-4 inline-block text-sm font-semibold text-brand-red hover:underline"
-              >
-                {s.phone}
-              </a>
-              <div className="mt-4 flex flex-wrap gap-2">
+              {s.opening_hours ? (
+                <p className="mt-2 text-xs text-neutral-500">{s.opening_hours}</p>
+              ) : null}
+              {s.phone ? (
+                <a
+                  href={`tel:${s.phone.replace(/\s/g, '')}`}
+                  className="mt-4 inline-block text-sm font-semibold text-brand-red hover:underline"
+                >
+                  {s.phone}
+                </a>
+              ) : null}
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {s.pickup_available ? (
+                  <span className="rounded-full bg-green-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-green-800">
+                    Pickup available
+                  </span>
+                ) : null}
                 <Link
                   to="/shop"
                   className="rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white transition hover:bg-neutral-800"

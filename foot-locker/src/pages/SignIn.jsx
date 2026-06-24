@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { SUPPORT_EMAIL } from '../config/brand.js';
-import { useStoreSettings } from '../hooks/useStoreSettings.js';
+import { DeveloperCredit } from '../components/DeveloperCredit.jsx';
 import {
   getPostLoginDestination,
   isAdminUser,
@@ -33,8 +32,6 @@ export function SignIn() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [signedInAsAdmin, setSignedInAsAdmin] = useState(false);
-  const { settings } = useStoreSettings();
-  const supportEmail = settings.support_email || SUPPORT_EMAIL;
 
   useEffect(() => {
     if (!location.state?.signedOut) return;
@@ -218,19 +215,29 @@ export function SignIn() {
             </>
           ) : null}
           <div>
-            <label
-              htmlFor="password"
-              className="text-xs font-bold uppercase tracking-wider text-neutral-500"
-            >
-              Password
-            </label>
-            <div className="relative mt-2">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label
+                htmlFor="password"
+                className="text-xs font-bold uppercase tracking-wider text-neutral-500"
+              >
+                Password
+              </label>
+              {mode === 'login' ? (
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-semibold text-brand-red transition hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              ) : null}
+            </div>
+            <div className="relative">
               <input
                 id="password"
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 required
-                autoComplete="current-password"
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-xl border border-neutral-200 px-3 py-3 pr-10 text-sm shadow-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/15"
@@ -260,14 +267,9 @@ export function SignIn() {
           >
             {loading ? 'Please wait...' : mode === 'register' ? 'Create account' : 'Sign in'}
           </button>
-          <p className="text-center text-xs text-neutral-500">
-            Forgot password? Contact{' '}
-            <a className="text-brand-red" href={`mailto:${supportEmail}`}>
-              {supportEmail}
-            </a>
-          </p>
         </form>
       )}
+      <DeveloperCredit variant="muted" className="mt-10 text-center" />
     </div>
   );
 }

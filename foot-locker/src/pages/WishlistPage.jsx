@@ -1,18 +1,29 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ProductCard } from '../components/ProductCard.jsx';
-import { mergeCatalogList } from '../utils/catalogStorage.js';
 import { useWishlist } from '../hooks/useWishlist.js';
+import { fetchProducts } from '../utils/api.js';
 import { isLoggedIn } from '../utils/auth.js';
 
 export function WishlistPage() {
   const { ids, products: apiProducts } = useWishlist();
+  const [guestProducts, setGuestProducts] = useState(/** @type {any[]} */ ([]));
+  const loggedIn = isLoggedIn();
 
-  const products = isLoggedIn() && apiProducts.length
-    ? apiProducts
-    : ids
-        .map((id) => mergeCatalogList().find((p) => p.id === id))
-        .filter((p) => p != null);
+  useEffect(() => {
+    if (loggedIn || !ids.length) {
+      setGuestProducts([]);
+      return;
+    }
+    const ac = new AbortController();
+    fetchProducts({ signal: ac.signal, throwOnError: true })
+      .then((all) => setGuestProducts(all.filter((p) => ids.includes(p.id))))
+      .catch(() => setGuestProducts([]));
+    return () => ac.abort();
+  }, [loggedIn, ids]);
+
+  const products = loggedIn ? apiProducts : guestProducts;
 
   if (!ids.length) {
     return (
@@ -37,13 +48,19 @@ export function WishlistPage() {
       <h1 className="text-3xl font-semibold tracking-tight text-black">Wishlist</h1>
       <p className="mt-2 text-neutral-600">
         {products.length} saved pair{products.length === 1 ? '' : 's'}
-        {isLoggedIn() ? ' — synced to your account.' : ' — stored on this device.'}
+        {loggedIn ? ' — synced to your account.' : ' — stored on this device.'}
       </p>
-      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {products.map((p) => (
-          <ProductCard key={p.id} product={p} />
-        ))}
-      </div>
+      {products.length === 0 ? (
+        <p className="mt-8 text-sm text-neutral-500">
+          Loading saved products from the catalog…
+        </p>
+      ) : (
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {products.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

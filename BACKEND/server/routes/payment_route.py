@@ -159,7 +159,8 @@ def mpesa_stk_push():
         
         if status_code != 200:
             logger.error(f"STK push failed with status {status_code}: {response}")
-            return jsonify(response), status_code
+            error_message = response.get('error', 'Failed to initiate M-Pesa payment')
+            return jsonify({"error": error_message, **response}), status_code
         
         # Create or update payment record if STK Push was successful
         checkout_request_id = response.get('CheckoutRequestID')
@@ -212,7 +213,7 @@ def mpesa_stk_push():
             
     except Exception as e:
         logger.error(f"STK push initiation failed: {str(e)}")
-        return jsonify({"error": "Failed to initiate STK push"}), 500
+        return jsonify({"error": str(e)}), 500
     
 
 

@@ -19,9 +19,9 @@ export function LogoMark({
   const isInvert = variant === 'invert';
   const isNav = variant === 'nav';
   const showSub = compact ? false : (showTagline ?? (!isInvert && isNav));
-  const box = isNav || isInvert ? 'h-9 w-9 text-base' : 'h-8 w-8 text-sm';
-  const title = isNav || isInvert ? 'text-[21px] sm:text-[23px]' : 'text-lg';
-  const subtitle = isNav || isInvert ? 'text-[10px]' : 'text-[9px]';
+  const box = isNav || isInvert ? 'h-8 w-8 text-sm' : 'h-8 w-8 text-sm';
+  const title = isNav || isInvert ? 'text-[18px] sm:text-[20px]' : 'text-lg';
+  const subtitle = isNav || isInvert ? 'text-[9px] leading-tight' : 'text-[9px]';
 
   const boxCls = isInvert
     ? 'rounded-lg bg-white font-bold leading-none text-neutral-950'
@@ -50,7 +50,7 @@ export function LogoMark({
         </span>
         {showSub ? (
           <span
-            className={`mt-0.5 font-semibold uppercase tracking-[0.28em] ${isInvert ? 'text-neutral-500' : 'text-neutral-400'} ${subtitle}`}
+            className={`mt-px font-semibold uppercase tracking-[0.22em] ${isInvert ? 'text-neutral-500' : 'text-neutral-400'} ${subtitle}`}
           >
             {TAGLINE}
           </span>

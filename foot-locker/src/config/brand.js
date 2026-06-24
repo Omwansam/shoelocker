@@ -8,3 +8,4 @@ export const WORDMARK_END = 'Locker';
 export const TAGLINE = "Kenya's sneakers & street heat";
 export const REWARDS_PROGRAM = 'Kickback Rewards';
 export const SUPPORT_EMAIL = 'hello@shoelocker.ke';
+export const DEVELOPER_STUDIO = 'DraftBit Studios';

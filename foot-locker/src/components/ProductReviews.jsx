@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
 import { isLoggedIn } from '../utils/auth.js';
 import { fetchProductReviews, submitProductReview } from '../utils/api.js';
-import { getReviewsForProduct } from '../data/productReviews.js';
 
-/**
- * @typedef {import('../data/products.js').products extends (infer P)[] ? P : never} Product
- */
+/** @typedef {import('../types/product.js').Product} Product */
 
 /** @param {{ product: Product }} props */
 export function ProductReviews({ product }) {
@@ -13,6 +10,7 @@ export function ProductReviews({ product }) {
   const [reviews, setReviews] = useState([]);
   const [average, setAverage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -23,22 +21,15 @@ export function ProductReviews({ product }) {
     let active = true;
     async function load() {
       if (!productId) {
-        const fallback = getReviewsForProduct(product.id, product.name);
         if (active) {
-          setReviews(
-            fallback.map((r, i) => ({
-              review_id: i,
-              rating: r.rating,
-              review_text: r.body,
-              created_at: r.at,
-              user: { username: r.author },
-            })),
-          );
-          setAverage(fallback.reduce((s, r) => s + r.rating, 0) / Math.max(1, fallback.length));
+          setReviews([]);
+          setAverage(null);
           setLoading(false);
         }
         return;
       }
+      setLoading(true);
+      setLoadError(false);
       try {
         const data = await fetchProductReviews(productId);
         if (!active) return;
@@ -46,17 +37,9 @@ export function ProductReviews({ product }) {
         setAverage(data.average_rating);
       } catch {
         if (active) {
-          const fallback = getReviewsForProduct(product.id, product.name);
-          setReviews(
-            fallback.map((r, i) => ({
-              review_id: i,
-              rating: r.rating,
-              review_text: r.body,
-              created_at: r.at,
-              user: { username: r.author },
-            })),
-          );
-          setAverage(fallback.reduce((s, r) => s + r.rating, 0) / Math.max(1, fallback.length));
+          setReviews([]);
+          setAverage(null);
+          setLoadError(true);
         }
       } finally {
         if (active) setLoading(false);
@@ -66,7 +49,7 @@ export function ProductReviews({ product }) {
     return () => {
       active = false;
     };
-  }, [productId, product.id, product.name]);
+  }, [productId]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -107,6 +90,12 @@ export function ProductReviews({ product }) {
         <div className="mt-8 flex justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-red border-t-transparent" />
         </div>
+      ) : loadError ? (
+        <p className="mt-8 rounded-xl border border-dashed border-neutral-200 bg-neutral-50 px-4 py-6 text-sm text-neutral-600">
+          Reviews could not be loaded. Make sure the backend is running and refresh.
+        </p>
+      ) : reviews.length === 0 ? (
+        <p className="mt-8 text-sm text-neutral-600">No reviews yet — be the first to share your experience.</p>
       ) : (
         <ul className="mt-8 space-y-6">
           {reviews.map((r) => (

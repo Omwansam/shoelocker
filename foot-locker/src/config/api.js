@@ -8,14 +8,12 @@
 const API_CONFIG_DEV = {
   baseURL: 'http://localhost:5000',
   timeout: 10000,
-  useMockAPI: false, // Set to true to use mock data instead of real API
 };
 
 // Production configuration  
 const API_CONFIG_PROD = {
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://api.shoelocker.com',
   timeout: 10000,
-  useMockAPI: import.meta.env.VITE_USE_MOCK_API === 'true' || false,
 };
 
 const isDevelopment = import.meta.env.MODE === 'development' || import.meta.env.DEV;

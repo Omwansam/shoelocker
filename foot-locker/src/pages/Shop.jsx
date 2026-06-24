@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Filters } from '../components/Filters.jsx';
@@ -9,6 +9,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { useProducts } from '../hooks/useProducts.js';
 import { SALE_MAX_KES } from '../config/market.js';
 import { PRODUCT_TYPES } from '../config/productTypes.js';
+import { resolveShopCollection } from '../config/shopCollections.js';
 import { formatPrice } from '../utils/format.js';
 import { priceBracketMatch } from '../utils/catalogFilters.js';
 
@@ -17,6 +18,12 @@ import { priceBracketMatch } from '../utils/catalogFilters.js';
 
 const VALID_CATEGORIES = /** @type {const} */ (['men', 'women', 'kids']);
 const VALID_TYPES = /** @type {const} */ (['shoes', 'apparel', 'accessories']);
+
+const CATEGORY_LABELS = {
+  men: "Men's",
+  women: "Women's",
+  kids: "Kids'",
+};
 
 const defaultFilters = /** @type {FilterState} */ ({
   brand: 'all',
@@ -33,6 +40,8 @@ export function Shop() {
   const catParam = searchParams.get('category') ?? 'all';
   const typeParam = searchParams.get('type') ?? (onSaleRoute ? 'all' : 'shoes');
   const sortParam = searchParams.get('sort');
+  const newOnly = searchParams.get('new') === '1';
+  const collection = resolveShopCollection(searchParams.get('collection'));
 
   /** @type {SortBy | null} */
   const initialSort =
@@ -44,23 +53,29 @@ export function Shop() {
           ? 'price-desc'
           : null;
 
-  const urlCategory =
-    catParam !== 'all' && VALID_CATEGORIES.includes(catParam)
+  const urlCategory = collection
+    ? (collection.category ?? null)
+    : catParam !== 'all' && VALID_CATEGORIES.includes(catParam)
       ? catParam
       : null;
 
   const productType = onSaleRoute
     ? 'all'
-    : typeParam !== 'all' && VALID_TYPES.includes(typeParam)
-      ? typeParam
-      : 'shoes';
+    : collection?.productType && collection.productType !== 'all'
+      ? collection.productType
+      : typeParam !== 'all' && VALID_TYPES.includes(typeParam)
+        ? typeParam
+        : 'shoes';
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 240);
   const [storedFilters, setStoredFilters] = useState({ ...defaultFilters });
 
   const [sortBy, setSortBy] = useState(
-    /** @type {SortBy} */ (initialSort ?? 'featured'),
+    /** @type {SortBy} */ (
+      initialSort ??
+        (collection?.sort === 'newest' || newOnly ? 'newest' : 'featured')
+    ),
   );
 
   const { products, loading, error, refetch } = useProducts({ delayMs: 360 });
@@ -71,16 +86,44 @@ export function Shop() {
   }, [products]);
 
   const brandQuery = searchParams.get('brand');
+  const brandDisplayQuery = searchParams.get('name');
+
+  const requestedBrand = useMemo(() => {
+    if (!brandQuery) return null;
+    return decodeURIComponent(brandQuery).trim();
+  }, [brandQuery]);
+
+  const displayBrandName = useMemo(() => {
+    if (brandDisplayQuery) return decodeURIComponent(brandDisplayQuery).trim();
+    return requestedBrand;
+  }, [brandDisplayQuery, requestedBrand]);
 
   const urlBrand = useMemo(() => {
-    if (!brandQuery) return null;
-    const decoded = decodeURIComponent(brandQuery).trim();
-    return (
-      brandsInCatalog.find(
-        (b) => b.toLowerCase() === decoded.toLowerCase(),
-      ) ?? null
+    if (!requestedBrand) return null;
+    const match = brandsInCatalog.find(
+      (b) => b.toLowerCase() === requestedBrand.toLowerCase(),
     );
-  }, [brandQuery, brandsInCatalog]);
+    return match ?? requestedBrand;
+  }, [requestedBrand, brandsInCatalog]);
+
+  useEffect(() => {
+    if (sortParam === 'newest') setSortBy('newest');
+    else if (sortParam === 'price-asc') setSortBy('price-asc');
+    else if (sortParam === 'price-desc') setSortBy('price-desc');
+    else if (collection?.sort === 'newest') setSortBy('newest');
+    else if (sortParam === null && !newOnly && !collection?.sort) setSortBy('featured');
+  }, [sortParam, newOnly, collection]);
+
+  useEffect(() => {
+    if (!requestedBrand) return;
+    setStoredFilters((prev) => ({ ...prev, brand: 'all' }));
+  }, [requestedBrand]);
+
+  const brandsForFilters = useMemo(() => {
+    const set = new Set(brandsInCatalog);
+    if (urlBrand && requestedBrand) set.add(urlBrand);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [brandsInCatalog, urlBrand, requestedBrand]);
 
   const sizesInCatalog = useMemo(() => {
     const s = new Set(products.flatMap((p) => p.sizes));
@@ -90,14 +133,16 @@ export function Shop() {
   const filters = useMemo(
     () => ({
       ...storedFilters,
-      category: urlCategory ?? storedFilters.category,
+      category: collection
+        ? (collection.category ?? 'all')
+        : (urlCategory ?? storedFilters.category),
       brand: urlBrand ?? storedFilters.brand,
       price: onSaleRoute ? /** @type {'sale'} */ ('sale') : storedFilters.price,
     }),
-    [storedFilters, urlCategory, urlBrand, onSaleRoute],
+    [storedFilters, urlCategory, urlBrand, onSaleRoute, collection],
   );
 
-  const brandLocked = Boolean(urlBrand);
+  const brandLocked = Boolean(requestedBrand);
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -106,7 +151,7 @@ export function Shop() {
       if (productType !== 'all' && pType !== productType) return false;
       if (
         filters.brand !== 'all' &&
-        p.brand !== filters.brand
+        p.brand.toLowerCase() !== filters.brand.toLowerCase()
       )
         return false;
       if (
@@ -117,6 +162,7 @@ export function Shop() {
       if (filters.size !== 'all' && !p.sizes.includes(filters.size))
         return false;
       if (!priceBracketMatch(filters.price, p.price)) return false;
+      if (newOnly && !p.isNew) return false;
       if (q) {
         const blob = `${p.name} ${p.brand}`.toLowerCase();
         if (!blob.includes(q)) return false;
@@ -139,21 +185,35 @@ export function Shop() {
         next.sort((a, b) => Number(b.isNew) - Number(a.isNew));
     }
     return next;
-  }, [debouncedSearch, filters, sortBy, products, productType]);
+  }, [debouncedSearch, filters, sortBy, products, productType, newOnly]);
 
   const pageTitle = onSaleRoute
     ? 'Sale'
-    : urlBrand
-      ? `Shop ${urlBrand}`
-      : productType === PRODUCT_TYPES.APPAREL
-        ? 'Shop apparel'
-        : 'Shop all shoes';
+    : collection
+      ? collection.title
+      : newOnly
+        ? 'New arrivals'
+        : urlCategory
+          ? `${CATEGORY_LABELS[urlCategory]} shoes`
+          : urlBrand
+            ? `${displayBrandName} shoes`
+          : productType === PRODUCT_TYPES.APPAREL
+              ? 'Shop apparel'
+              : 'Shop all shoes';
 
   const pageDesc = onSaleRoute
     ? `Sale wall: every style is ${formatPrice(SALE_MAX_KES)} or less — grab your Kenyan size.`
-    : productType === PRODUCT_TYPES.APPAREL
-      ? 'Hoodies, tees, shorts, and jackets — filter by brand, size, and gender.'
-      : 'Every price is in Kenyan Shillings — filter by brand, size, and category for your city run.';
+    : collection
+      ? collection.description
+      : newOnly
+        ? 'Fresh pairs just landed — filter by brand, size, and category.'
+        : urlCategory
+          ? `${CATEGORY_LABELS[urlCategory]} footwear — filter by brand, size, and price in KES.`
+          : urlBrand
+            ? `Every ${displayBrandName} style in stock — filter by size, category, and price in KES.`
+            : productType === PRODUCT_TYPES.APPAREL
+              ? 'Hoodies, tees, shorts, and jackets — filter by brand, size, and gender.'
+              : 'Every price is in Kenyan Shillings — filter by brand, size, and category for your city run.';
 
   function patchFilters(/** @type {Partial<FilterState>} */ patch) {
     setStoredFilters((prev) => ({ ...prev, ...patch }));
@@ -178,7 +238,7 @@ export function Shop() {
 
       <div className="mb-8 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-6">
         <Filters
-          brandsInCatalog={brandsInCatalog}
+          brandsInCatalog={brandsForFilters}
           sizesInCatalog={sizesInCatalog}
           filters={filters}
           onFiltersChange={patchFilters}
@@ -206,8 +266,16 @@ export function Shop() {
         <ProductGridSkeleton count={8} />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title="No matches"
-          description="Try loosening filters or searching for a different brand or silhouette."
+          title={
+            requestedBrand
+              ? `No ${displayBrandName} matches yet`
+              : 'No matches'
+          }
+          description={
+            requestedBrand
+              ? `We're stocking more ${displayBrandName} pairs — try another size or browse the full catalog.`
+              : 'Try loosening filters or searching for a different brand or silhouette.'
+          }
           icon={
             <svg
               xmlns="http://www.w3.org/2000/svg"

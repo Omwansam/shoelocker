@@ -29,6 +29,7 @@ from routes.wishlist_route import wishlist_bp
 from routes.newsletter_route import newsletter_bp
 from routes.reviews_route import reviews_bp
 from routes.product_ai_route import product_ai_bp
+from routes.storefront_route import storefront_bp
 
 import os
 
@@ -136,6 +137,7 @@ app.register_blueprint(shipping_bp)
 app.register_blueprint(wishlist_bp, url_prefix='/wishlist')
 app.register_blueprint(newsletter_bp, url_prefix='/newsletter')
 app.register_blueprint(reviews_bp, url_prefix='/reviews')
+app.register_blueprint(storefront_bp, url_prefix='/storefront')
 
 # Register auth, products, and product images blueprints
 app.register_blueprint(users_bp, url_prefix='/auth')

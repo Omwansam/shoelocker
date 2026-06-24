@@ -8,10 +8,10 @@ export const megaColumns = {
     {
       heading: 'Shoes',
       links: [
-        { title: 'Basketball', href: '/shop?category=men' },
-        { title: 'Casual', href: '/shop?category=men' },
-        { title: 'Running', href: '/shop?category=men' },
-        { title: "All Men's Shoes", href: '/shop?category=men' },
+        { title: 'Basketball', href: '/shop?category=men&type=shoes' },
+        { title: 'Casual', href: '/shop?category=men&type=shoes' },
+        { title: 'Running', href: '/shop?category=men&type=shoes' },
+        { title: "All men's shoes", href: '/shop?category=men&type=shoes' },
       ],
     },
     {
@@ -26,18 +26,18 @@ export const megaColumns = {
     {
       heading: 'Shop by size',
       links: [
-        { title: '7', href: '/shop?category=men' },
-        { title: '8', href: '/shop?category=men' },
-        { title: '9', href: '/shop?category=men' },
-        { title: '10', href: '/shop?category=men' },
-        { title: '11', href: '/shop?category=men' },
+        { title: 'UK 7', href: '/shop?category=men&type=shoes' },
+        { title: 'UK 8', href: '/shop?category=men&type=shoes' },
+        { title: 'UK 9', href: '/shop?category=men&type=shoes' },
+        { title: 'UK 10', href: '/shop?category=men&type=shoes' },
+        { title: 'UK 11', href: '/shop?category=men&type=shoes' },
       ],
     },
     {
       heading: 'Featured',
       links: [
-        { title: 'New Arrivals', href: '/releases' },
-        { title: 'Top rated styles', href: '/shop' },
+        { title: 'New arrivals', href: '/releases' },
+        { title: 'New on shop', href: '/shop?category=men&new=1&sort=newest' },
         { title: 'Sale', href: '/sale' },
       ],
     },
@@ -46,9 +46,9 @@ export const megaColumns = {
     {
       heading: 'Shoes',
       links: [
-        { title: 'Running', href: '/shop?category=women' },
-        { title: 'Casual', href: '/shop?category=women' },
-        { title: "All Women's Shoes", href: '/shop?category=women' },
+        { title: 'Running', href: '/shop?category=women&type=shoes' },
+        { title: 'Casual', href: '/shop?category=women&type=shoes' },
+        { title: "All women's shoes", href: '/shop?category=women&type=shoes' },
       ],
     },
     {
@@ -63,16 +63,17 @@ export const megaColumns = {
     {
       heading: 'Shop by size',
       links: [
-        { title: '6', href: '/shop?category=women' },
-        { title: '7', href: '/shop?category=women' },
-        { title: '8', href: '/shop?category=women' },
+        { title: 'UK 4', href: '/shop?category=women&type=shoes' },
+        { title: 'UK 5', href: '/shop?category=women&type=shoes' },
+        { title: 'UK 6', href: '/shop?category=women&type=shoes' },
+        { title: 'UK 7', href: '/shop?category=women&type=shoes' },
       ],
     },
     {
       heading: 'Featured',
       links: [
-        { title: 'New Arrivals', href: '/releases' },
-        { title: 'White shoes', href: '/shop?category=women' },
+        { title: 'New arrivals', href: '/releases' },
+        { title: 'New on shop', href: '/shop?category=women&new=1&sort=newest' },
         { title: 'Sale', href: '/sale' },
       ],
     },
@@ -81,15 +82,15 @@ export const megaColumns = {
     {
       heading: 'Shoes',
       links: [
-        { title: 'Basketball', href: '/shop?category=kids' },
-        { title: 'Casual', href: '/shop?category=kids' },
-        { title: "All Kid's Shoes", href: '/shop?category=kids' },
+        { title: 'Basketball', href: '/shop?category=kids&type=shoes' },
+        { title: 'Casual', href: '/shop?category=kids&type=shoes' },
+        { title: "All kids' shoes", href: '/shop?category=kids&type=shoes' },
       ],
     },
     {
       heading: 'Apparel',
       links: [
-        { title: "Kids' fleece sets", href: '/apparel?category=kids&style=hoodies' },
+        { title: "Kids' fleece", href: '/apparel?category=kids&style=hoodies' },
         { title: "Kids' tees", href: '/apparel?category=kids&style=tees' },
         { title: "All kids' apparel", href: '/apparel?category=kids' },
       ],
@@ -97,14 +98,14 @@ export const megaColumns = {
     {
       heading: 'Sizes',
       links: [
-        { title: 'Big kids', href: '/shop?category=kids' },
-        { title: 'Little kids', href: '/shop?category=kids' },
+        { title: 'Big kids', href: '/shop?category=kids&type=shoes' },
+        { title: 'Little kids', href: '/shop?category=kids&type=shoes' },
       ],
     },
     {
       heading: 'Featured',
       links: [
-        { title: 'New Arrivals', href: '/releases' },
+        { title: 'New arrivals', href: '/releases' },
         { title: 'Sale', href: '/sale' },
       ],
     },
@@ -132,7 +133,7 @@ export const megaColumns = {
     {
       heading: 'Also shop',
       links: [
-        { title: 'Shoes', href: '/shop' },
+        { title: 'Shoes', href: '/shop?type=shoes' },
         { title: 'New arrivals', href: '/releases' },
         { title: 'Sale', href: '/sale' },
       ],
@@ -141,19 +142,41 @@ export const megaColumns = {
 };
 
 /** @type {MegaLinks} */
-export const megaBrands = [
-  { title: 'Nike', href: '/shop?brand=Nike' },
-  { title: 'adidas', href: '/shop?brand=adidas' },
-  { title: 'New Balance', href: '/shop?brand=New%20Balance' },
-  { title: 'Puma', href: '/shop?brand=Puma' },
-  { title: 'ASICS', href: '/shop?brand=ASICS' },
-  { title: 'Converse', href: '/shop?brand=Converse' },
+export const megaNewTrending = [
+  { title: 'Popular right now', href: '/#popular-now' },
+  { title: 'New arrivals', href: '/releases' },
+  { title: 'New on shop', href: '/shop?new=1&sort=newest' },
+  { title: 'Fresh apparel', href: '/apparel' },
+  { title: 'Sale wall', href: '/sale' },
 ];
 
-/** @type {MegaLinks} */
-export const megaNewTrending = [
-  { title: 'New arrivals', href: '/releases' },
-  { title: 'Performance picks', href: '/shop?category=men' },
-  { title: 'Apparel drop', href: '/apparel' },
-  { title: 'Basketball vibes', href: '/shop?category=men' },
+/** Quick strip + mobile shortcuts — all routes load API-backed pages */
+export const navQuickLinks = [
+  { label: "Men's", href: '/shop?category=men&type=shoes' },
+  { label: "Women's", href: '/shop?category=women&type=shoes' },
+  { label: "Kids'", href: '/shop?category=kids&type=shoes' },
+  { label: 'Apparel', href: '/apparel' },
+  { label: 'Stores', href: '/stores' },
+  { label: 'New drops', href: '/releases' },
+  { label: 'Sale', href: '/sale', accent: true },
+  { label: 'Brands', href: '/brands' },
 ];
+
+/** @type {Record<'men'|'women'|'kids', { label: string, href: string, blurb: string }>} */
+export const megaShopAllCta = {
+  men: {
+    label: "Shop all men's",
+    href: '/shop?category=men&type=shoes',
+    blurb: 'Full footwear wall — live stock from the catalog API.',
+  },
+  women: {
+    label: "Shop all women's",
+    href: '/shop?category=women&type=shoes',
+    blurb: 'Every women\'s pair in stock, priced in KES.',
+  },
+  kids: {
+    label: "Shop all kids'",
+    href: '/shop?category=kids&type=shoes',
+    blurb: 'Youth sizes refreshed from the warehouse feed.',
+  },
+};

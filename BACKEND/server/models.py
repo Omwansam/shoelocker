@@ -104,6 +104,19 @@ class User(db.Model):
         return f'<User {self.username}>'
 
 
+class PasswordResetToken(db.Model):
+    __tablename__ = 'password_reset_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+
+    user = db.relationship('User', backref=db.backref('password_reset_tokens', lazy='dynamic'))
+
+
 class Settings(db.Model):
     __tablename__ = 'settings'
 
@@ -775,3 +788,146 @@ class Supplier(db.Model):
 
     def __repr__(self):
         return f'<Supplier {self.name}>'
+
+
+###############################################################################################################################################################################################################
+class Store(db.Model):
+    """Physical retail branch shown on the storefront store locator."""
+    __tablename__ = 'stores'
+
+    store_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(150), nullable=False)
+    street = db.Column(db.String(200), nullable=False)
+    city = db.Column(db.String(100), nullable=False)
+    county = db.Column(db.String(100), nullable=False)
+    postcode = db.Column(db.String(20))
+    phone = db.Column(db.String(30))
+    email = db.Column(db.String(120))
+    opening_hours = db.Column(db.String(200))
+    pickup_available = db.Column(db.Boolean, default=False, nullable=False)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    def to_dict(self):
+        return {
+            'id': str(self.store_id),
+            'store_id': self.store_id,
+            'name': self.name,
+            'street': self.street,
+            'city': self.city,
+            'county': self.county,
+            'postcode': self.postcode,
+            'phone': self.phone,
+            'email': self.email,
+            'opening_hours': self.opening_hours,
+            'pickup_available': bool(self.pickup_available),
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+        }
+
+    def __repr__(self):
+        return f'<Store {self.name}>'
+
+
+class RewardTier(db.Model):
+    """Loyalty program tier definitions for the Rewards page."""
+    __tablename__ = 'reward_tiers'
+
+    tier_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(80), nullable=False)
+    min_spend_kes = db.Column(db.Float, default=0, nullable=False)
+    points_multiplier = db.Column(db.Float, default=1.0, nullable=False)
+    perks = db.Column(db.JSON, default=list)
+    sort_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+
+    def to_dict(self):
+        return {
+            'id': self.tier_id,
+            'name': self.name,
+            'min_spend_kes': self.min_spend_kes,
+            'points_multiplier': self.points_multiplier,
+            'perks': self.perks or [],
+        }
+
+    def __repr__(self):
+        return f'<RewardTier {self.name}>'
+
+
+class SupportArticle(db.Model):
+    """Help & policy content rendered on the storefront support page."""
+    __tablename__ = 'support_articles'
+
+    article_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    slug = db.Column(db.String(80), unique=True, nullable=False)
+    title = db.Column(db.String(150), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(50), default='general')
+    sort_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    updated_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    def to_dict(self):
+        return {
+            'id': self.slug,
+            'slug': self.slug,
+            'title': self.title,
+            'body': self.body,
+            'category': self.category,
+        }
+
+    def __repr__(self):
+        return f'<SupportArticle {self.slug}>'
+
+
+class StorefrontBrand(db.Model):
+    """Homepage brand cards and GOAT-style shoe icon wall tiles."""
+    __tablename__ = 'storefront_brands'
+
+    brand_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    slug = db.Column(db.String(80), unique=True, nullable=False)
+    label = db.Column(db.String(100), nullable=False)
+    catalog_brand = db.Column(db.String(100), nullable=False)
+    image_url = db.Column(db.String(500))
+    tagline = db.Column(db.String(220))
+    accent_color = db.Column(db.String(20))
+    is_featured = db.Column(db.Boolean, default=False, nullable=False)
+    featured_order = db.Column(db.Integer)
+    wall_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    updated_at = db.Column(
+        db.DateTime,
+        server_default=db.func.current_timestamp(),
+        onupdate=db.func.current_timestamp(),
+    )
+
+    def to_public_dict(self):
+        return {
+            'id': self.slug,
+            'slug': self.slug,
+            'label': self.label,
+            'catalogBrand': self.catalog_brand,
+            'image': self.image_url or '',
+            'tagline': self.tagline or '',
+            'accent': self.accent_color or '#e60012',
+        }
+
+    def to_admin_dict(self):
+        data = self.to_public_dict()
+        data.update({
+            'brandId': self.brand_id,
+            'isFeatured': bool(self.is_featured),
+            'featuredOrder': self.featured_order,
+            'wallOrder': self.wall_order,
+            'isActive': bool(self.is_active),
+        })
+        return data
+
+    def __repr__(self):
+        return f'<StorefrontBrand {self.slug}>'

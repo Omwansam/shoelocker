@@ -1,27 +1,6 @@
 import axios, { CanceledError } from 'axios';
-import { mergeCatalogList } from './catalogStorage.js';
 import API_CONFIG from '../config/api.js';
 import { clearAuthStorage } from './authApi.js';
-
-/** @param {AbortSignal | undefined} signal */
-function sleep(ms, signal) {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new CanceledError('Request aborted'));
-      return;
-    }
-    const onAbort = () => {
-      clearTimeout(t);
-      signal?.removeEventListener('abort', onAbort);
-      reject(new CanceledError('Request aborted'));
-    };
-    const t = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve(undefined);
-    }, ms);
-    signal?.addEventListener('abort', onAbort);
-  });
-}
 
 /**
  * Transform backend product format to frontend format
@@ -47,6 +26,8 @@ function transformBackendProduct(product) {
     all_images: product.all_images || product.images || [],
     stock_quantity: product.stock_quantity || 0,
     category_id: product.category_id,
+    order_count: product.order_count ?? 0,
+    avg_rating: product.avg_rating ?? 0,
   };
 }
 
@@ -82,7 +63,8 @@ api.interceptors.response.use(
         url.includes('/api/bestsellers') ||
         url.includes('/api/recent') ||
         url.includes('/api/related-products') ||
-        url.includes('/categories');
+        url.includes('/categories') ||
+        url.includes('/storefront/');
       if (!isPublicRead) {
         clearAuthStorage();
       }
@@ -91,49 +73,12 @@ api.interceptors.response.use(
   },
 );
 
-/** Fallback mock adapter for when backend is unavailable */
-async function mockApiAdapter(config) {
-  const delayMs =
-    typeof config.customDelayMs === 'number' ? config.customDelayMs : 420;
-  await sleep(delayMs, config.signal);
-
-  if (
-    config.url === '/products' &&
-    (!config.method || config.method.toLowerCase() === 'get')
-  ) {
-    const list = mergeCatalogList();
-    /** @type {axios.AxiosResponse} */
-    const response = {
-      data: list,
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      config,
-      request: {} /* mock */,
-    };
-    return response;
-  }
-
-  throw new axios.AxiosError('Not found', null, config);
-}
-
 /**
- * @param {{ signal?: AbortSignal; delayMs?: number }} [opts]
+ * @param {{ signal?: AbortSignal; page?: number; perPage?: number; productType?: string; storefrontCategory?: string; search?: string; isNew?: boolean; sortBy?: string; sortOrder?: string; throwOnError?: boolean }} [opts]
  * @returns {Promise<any[]>}
  */
 export async function fetchProducts(opts = {}) {
   try {
-    if (API_CONFIG.useMockAPI) {
-      const mockConfig = {
-        url: '/products',
-        method: 'get',
-        customDelayMs: opts.delayMs,
-        signal: opts.signal,
-      };
-      const response = await mockApiAdapter(mockConfig);
-      return response.data;
-    }
-
     const params = {
       page: opts.page || 1,
       per_page: opts.perPage || 1000,
@@ -141,6 +86,9 @@ export async function fetchProducts(opts = {}) {
     if (opts.productType) params.product_type = opts.productType;
     if (opts.storefrontCategory) params.storefront_category = opts.storefrontCategory;
     if (opts.search) params.search = opts.search;
+    if (opts.isNew) params.is_new = 'true';
+    if (opts.sortBy) params.sort_by = opts.sortBy;
+    if (opts.sortOrder) params.sort_order = opts.sortOrder;
 
     const res = await api.get('/api/product', {
       params,
@@ -153,8 +101,128 @@ export async function fetchProducts(opts = {}) {
     return res.data || [];
   } catch (error) {
     if (opts.throwOnError) throw error;
-    console.warn('Backend API failed, falling back to mock data:', error.message);
-    return mergeCatalogList();
+    console.warn('Backend API failed:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Homepage featured wall — new footwear first, then recent drops as fallback.
+ * @param {{ limit?: number; signal?: AbortSignal }} [opts]
+ * @returns {Promise<any[]>}
+ */
+export async function fetchFeaturedPicks(opts = {}) {
+  const limit = opts.limit || 4;
+
+  const mergeUnique = (primary, secondary) => {
+    const seen = new Set(primary.map((p) => p.id));
+    const merged = [...primary];
+    for (const item of secondary) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      merged.push(item);
+      if (merged.length >= limit) break;
+    }
+    return merged.slice(0, limit);
+  };
+
+  const flagged = await fetchProducts({
+    isNew: true,
+    productType: 'shoes',
+    perPage: limit,
+    sortBy: 'created_at',
+    sortOrder: 'desc',
+    signal: opts.signal,
+    throwOnError: true,
+  });
+
+  if (flagged.length >= limit) {
+    return flagged.slice(0, limit);
+  }
+
+  const recent = await fetchRecentProducts({
+    limit: limit * 2,
+    signal: opts.signal,
+    throwOnError: true,
+  });
+  const recentShoes = recent.filter((p) => (p.productType || 'shoes') === 'shoes');
+  return mergeUnique(flagged, recentShoes);
+}
+
+/**
+ * Homepage trending rail — bestsellers from order data, catalog fallback.
+ * Returns a rotation pool; the UI should display only the first `displayLimit` items.
+ * @param {{ poolSize?: number; signal?: AbortSignal }} [opts]
+ * @returns {Promise<any[]>}
+ */
+export async function fetchPopularNow(opts = {}) {
+  const poolSize = opts.poolSize ?? 48;
+
+  const mergeUnique = (primary, secondary, max) => {
+    const seen = new Set(primary.map((p) => p.id));
+    const merged = [...primary];
+    for (const item of secondary) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      merged.push(item);
+      if (merged.length >= max) break;
+    }
+    return merged.slice(0, max);
+  };
+
+  const bestsellers = await fetchBestSellers({
+    limit: poolSize,
+    productType: 'shoes',
+    signal: opts.signal,
+    throwOnError: true,
+  });
+
+  if (bestsellers.length >= poolSize) {
+    return bestsellers.slice(0, poolSize);
+  }
+
+  const catalog = await fetchProducts({
+    productType: 'shoes',
+    perPage: Math.min(poolSize * 2, 200),
+    sortBy: 'created_at',
+    sortOrder: 'desc',
+    signal: opts.signal,
+    throwOnError: true,
+  });
+  return mergeUnique(bestsellers, catalog, poolSize);
+}
+
+/**
+ * Search products by keyword (name, brand, description, slug, category).
+ * @param {string} query
+ * @param {{ signal?: AbortSignal; perPage?: number; throwOnError?: boolean }} [opts]
+ * @returns {Promise<{ products: any[], source: 'api' }>}
+ */
+export async function searchProducts(query, opts = {}) {
+  const q = String(query ?? '').trim();
+  if (!q) {
+    return { products: [], source: 'api' };
+  }
+
+  try {
+    const res = await api.get('/api/product', {
+      params: {
+        search: q,
+        page: 1,
+        per_page: opts.perPage || 48,
+      },
+      signal: opts.signal,
+    });
+
+    const rows = res.data?.products
+      ? res.data.products.map(transformBackendProduct)
+      : [];
+
+    return { products: rows, source: 'api' };
+  } catch (error) {
+    if (opts.throwOnError) throw error;
+    console.warn('Product search API failed:', error.message);
+    return { products: [], source: 'api' };
   }
 }
 
@@ -165,11 +233,17 @@ export async function fetchProducts(opts = {}) {
  */
 export async function fetchBestSellers(opts = {}) {
   try {
+    const params = {};
+    if (opts.limit) params.limit = opts.limit;
+    if (opts.productType) params.product_type = opts.productType;
+
     const res = await api.get('/api/bestsellers', {
+      params,
       signal: opts.signal,
     });
     return (res.data || []).map(transformBackendProduct);
   } catch (error) {
+    if (opts.throwOnError) throw error;
     console.warn('Failed to fetch bestsellers:', error.message);
     return [];
   }
@@ -190,6 +264,7 @@ export async function fetchRecentProducts(opts = {}) {
     });
     return (res.data || []).map(transformBackendProduct);
   } catch (error) {
+    if (opts.throwOnError) throw error;
     console.warn('Failed to fetch recent products:', error.message);
     return [];
   }
@@ -705,8 +780,104 @@ export async function deleteAddress(addressId, opts = {}) {
 
 /** @param {string} email @param {{ signal?: AbortSignal }} [opts] */
 export async function subscribeNewsletter(email, opts = {}) {
-  const res = await api.post('/newsletter/subscribe', { email }, { signal: opts.signal });
-  return res.data;
+  try {
+    const res = await api.post('/newsletter/subscribe', { email }, { signal: opts.signal });
+    return res.data;
+  } catch (error) {
+    const data = error.response?.data;
+    const msg =
+      (typeof data === 'object' && (data.error || data.message)) ||
+      'Could not subscribe. Make sure the backend is running.';
+    throw new Error(msg);
+  }
+}
+
+/**
+ * Fetch active retail store branches for the store locator.
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any[]>}
+ */
+export async function fetchStores(opts = {}) {
+  const res = await api.get('/storefront/stores', { signal: opts.signal });
+  return res.data?.stores || [];
+}
+
+/**
+ * Fetch the rewards program (tiers + perks) and, when signed in, the member's
+ * points and tier progress.
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<{ program: any, member: any }>}
+ */
+export async function fetchRewards(opts = {}) {
+  const res = await api.get('/storefront/rewards', { signal: opts.signal });
+  return { program: res.data?.program || null, member: res.data?.member || null };
+}
+
+/**
+ * Fetch help & policy articles for the support page.
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<any[]>}
+ */
+export async function fetchSupportArticles(opts = {}) {
+  const res = await api.get('/storefront/support', { signal: opts.signal });
+  return res.data?.articles || [];
+}
+
+/**
+ * @param {string} slug
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function fetchSupportArticle(slug, opts = {}) {
+  const res = await api.get(`/storefront/support/${encodeURIComponent(slug)}`, {
+    signal: opts.signal,
+  });
+  return res.data?.article;
+}
+
+/**
+ * Homepage featured brand cards + GOAT-style shoe icon wall.
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<{ featured: any[], wall: any[] }>}
+ */
+export async function fetchStorefrontBrands(opts = {}) {
+  const res = await api.get('/storefront/brands', { signal: opts.signal });
+  return {
+    featured: res.data?.featured || [],
+    wall: res.data?.wall || [],
+  };
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchAdminStorefrontBrands(opts = {}) {
+  const res = await api.get('/storefront/admin/brands', { signal: opts.signal });
+  return res.data?.brands || [];
+}
+
+/**
+ * @param {number} brandId
+ * @param {Record<string, unknown>} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function updateAdminStorefrontBrand(brandId, payload, opts = {}) {
+  const res = await api.put(`/storefront/admin/brands/${brandId}`, payload, {
+    signal: opts.signal,
+  });
+  return res.data?.brand;
+}
+
+/**
+ * @param {number} brandId
+ * @param {File} imageFile
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function uploadAdminStorefrontBrandImage(brandId, imageFile, opts = {}) {
+  const form = new FormData();
+  form.append('image', imageFile);
+  const res = await api.post(`/storefront/admin/brands/${brandId}/image`, form, {
+    signal: opts.signal,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data?.brand;
 }
 
 /** @param {number} productId @param {{ signal?: AbortSignal }} [opts] */
@@ -728,5 +899,73 @@ export async function submitProductReview(productId, payload, opts = {}) {
 /** @param {number} orderId @param {string} reason @param {{ signal?: AbortSignal }} [opts] */
 export async function requestOrderReturn(orderId, reason, opts = {}) {
   const res = await api.post(`/orders/${orderId}/return`, { reason }, { signal: opts.signal });
+  return res.data;
+}
+
+// —— PulseDesk: staff / suppliers / content ——
+
+/** @param {Record<string, string | number>} [params] @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchAdminUsers(params = {}, opts = {}) {
+  const res = await api.get('/user-management/admin/users', { params, signal: opts.signal });
+  return res.data;
+}
+
+/** @param {any} payload @param {{ signal?: AbortSignal }} [opts] */
+export async function createAdminUser(payload, opts = {}) {
+  const res = await api.post('/user-management/admin/users', payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} userId @param {{ signal?: AbortSignal }} [opts] */
+export async function toggleAdminUserStatus(userId, opts = {}) {
+  const res = await api.put(`/user-management/admin/users/${userId}/toggle-status`, {}, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {Record<string, string | number>} [params] @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchAdminSuppliers(params = {}, opts = {}) {
+  const res = await api.get('/suppliers/admin/suppliers', { params, signal: opts.signal });
+  return res.data;
+}
+
+/** @param {any} payload @param {{ signal?: AbortSignal }} [opts] */
+export async function createAdminSupplier(payload, opts = {}) {
+  const res = await api.post('/suppliers/admin/suppliers', payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} supplierId @param {any} payload @param {{ signal?: AbortSignal }} [opts] */
+export async function updateAdminSupplier(supplierId, payload, opts = {}) {
+  const res = await api.put(`/suppliers/admin/suppliers/${supplierId}`, payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} supplierId @param {{ signal?: AbortSignal }} [opts] */
+export async function deleteAdminSupplier(supplierId, opts = {}) {
+  const res = await api.delete(`/suppliers/admin/suppliers/${supplierId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {Record<string, string | number>} [params] @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchAdminBlogPosts(params = {}, opts = {}) {
+  const res = await api.get('/blog/admin/posts', { params, signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} postId @param {any} payload @param {{ signal?: AbortSignal }} [opts] */
+export async function updateAdminBlogPost(postId, payload, opts = {}) {
+  const res = await api.put(`/blog/admin/posts/${postId}`, payload, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {number} postId @param {{ signal?: AbortSignal }} [opts] */
+export async function deleteAdminBlogPost(postId, opts = {}) {
+  const res = await api.delete(`/blog/admin/posts/${postId}`, { signal: opts.signal });
+  return res.data;
+}
+
+/** @param {{ signal?: AbortSignal }} [opts] */
+export async function fetchAdminBlogStats(opts = {}) {
+  const res = await api.get('/blog/admin/stats', { signal: opts.signal });
   return res.data;
 }

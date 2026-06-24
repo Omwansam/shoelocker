@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { suggestProductId } from '../../utils/catalogStorage.js';
+import { suggestProductId } from '../../utils/productSlug.js';
 import { resolveProductImageUrl } from '../../utils/productImages.js';
 import { fetchProductAiSuggest } from '../../utils/api.js';
 import { useAdminProductAPI } from '../../hooks/useAdminProductAPI.js';

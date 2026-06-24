@@ -4,7 +4,7 @@ from models import Product, ProductImage, OrderItem, Review, Category
 from flask_jwt_extended import jwt_required
 import os
 import json
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 from datetime import datetime
 
 from extensions import db
@@ -12,7 +12,29 @@ from extensions import db
 # Blueprint Configuration
 product_bp = Blueprint('products', __name__)
 
-MAX_IMAGES_PER_PRODUCT = 10 
+MAX_IMAGES_PER_PRODUCT = 10
+
+
+def apply_product_search(query, search_text):
+    """Match each whitespace-separated token against common storefront fields."""
+    if not search_text:
+        return query
+
+    tokens = [t.strip() for t in search_text.split() if t.strip()]
+    for token in tokens:
+        term = f'%{token}%'
+        query = query.filter(
+            or_(
+                Product.product_name.ilike(term),
+                Product.product_description.ilike(term),
+                Product.brand.ilike(term),
+                Product.product_slug.ilike(term),
+                Product.storefront_category.ilike(term),
+                Product.product_type.ilike(term),
+            )
+        )
+    return query
+
 
 def serialize_product(product):
     # Get primary image
@@ -184,16 +206,23 @@ def sync_product_images(product):
 def get_best_sellers():
     """Retrieve best selling products based on order frequency and ratings."""
     try:
-        # Get products with their order counts and average ratings
-        best_sellers = db.session.query(
+        limit = request.args.get('limit', 48, type=int)
+        limit = max(1, min(limit, 200))
+        product_type = request.args.get('product_type', '').strip()
+
+        query = db.session.query(
             Product,
             func.count(OrderItem.order_item_id).label('order_count'),
             func.avg(Review.rating).label('avg_rating')
         ).outerjoin(OrderItem, Product.product_id == OrderItem.product_id)\
-         .outerjoin(Review, Product.product_id == Review.product_id)\
-         .group_by(Product.product_id)\
+         .outerjoin(Review, Product.product_id == Review.product_id)
+
+        if product_type:
+            query = query.filter(Product.product_type == product_type)
+
+        best_sellers = query.group_by(Product.product_id)\
          .order_by(desc('order_count'), desc('avg_rating'))\
-         .limit(8)\
+         .limit(limit)\
          .all()
         
         result = []
@@ -358,6 +387,7 @@ def get_products():
         category_id = request.args.get('category_id', type=int)
         product_type = request.args.get('product_type', '').strip()
         storefront_category = request.args.get('storefront_category', '').strip()
+        is_new = request.args.get('is_new', '').strip().lower()
         search = request.args.get('search', '').strip()
         status = request.args.get('status', '').strip()
         sort_by = request.args.get('sort_by', 'product_name')
@@ -375,12 +405,11 @@ def get_products():
 
         if storefront_category:
             query = query.filter(Product.storefront_category == storefront_category)
-        
-        if search:
-            query = query.filter(
-                Product.product_name.ilike(f'%{search}%') |
-                Product.product_description.ilike(f'%{search}%')
-            )
+
+        if is_new in ('1', 'true', 'yes', 'y', 't'):
+            query = query.filter(Product.is_new.is_(True))
+
+        query = apply_product_search(query, search)
         
         if status:
             if status == 'out_of_stock':

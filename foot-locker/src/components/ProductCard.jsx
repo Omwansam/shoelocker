@@ -4,22 +4,24 @@ import { useCart } from '../hooks/useCart.js';
 import { useToast } from '../hooks/useToast.js';
 import { useWishlist } from '../hooks/useWishlist.js';
 import { formatPrice } from '../utils/format.js';
+import { FALLBACK_PRODUCT_IMAGE, productDisplayImage } from '../utils/productImages.js';
 
 /**
- * @typedef {import('../data/products.js').products extends (infer P)[] ? P : never} Product
+ * @typedef {import('../types/product.js').Product} Product
  */
 
-/** @param {{ product: Product, className?: string, showSaleSticker?: boolean }} props */
+/** @param {{ product: Product, className?: string, showSaleSticker?: boolean, variant?: 'light' | 'dark' }} props */
 export function ProductCard({
   product,
   className = '',
   showSaleSticker = false,
+  variant = 'light',
 }) {
   const { addItem, openDrawer } = useCart();
   const { show: showToast } = useToast();
   const { has, toggle } = useWishlist();
   const [size, setSize] = useState(product.sizes[0] ?? '');
-  const [swap, setSwap] = useState(false);
+  const [imgSrc, setImgSrc] = useState(() => productDisplayImage(product.image));
   const labelId = useId();
 
   function handleAdd(e) {
@@ -37,13 +39,21 @@ export function ProductCard({
     showToast(on ? 'Removed from wishlist' : 'Saved to wishlist', 'info');
   }
 
-  const heroSrc = swap && product.hoverImage ? product.hoverImage : product.image;
+  function handleImageSwap(on) {
+    setImgSrc(productDisplayImage(on && product.hoverImage ? product.hoverImage : product.image));
+  }
+
+  const isDark = variant === 'dark';
 
   return (
     <article
-      className={`group flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-card-hover)] ${className}`}
+      className={`group flex flex-col overflow-hidden rounded-2xl border shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-card-hover)] ${
+        isDark
+          ? 'border-white/10 bg-neutral-900'
+          : 'border-neutral-200 bg-white'
+      } ${className}`}
     >
-      <div className="relative aspect-[4/5] overflow-hidden bg-neutral-100">
+      <div className={`relative aspect-[4/5] overflow-hidden ${isDark ? 'bg-neutral-800' : 'bg-neutral-100'}`}>
         <button
           type="button"
           onClick={handleWishlist}
@@ -71,15 +81,16 @@ export function ProductCard({
           aria-describedby={labelId}
         >
           <img
-          src={heroSrc}
+          src={imgSrc}
           alt={`${product.brand} ${product.name}`}
           className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-[1.04]"
           loading="lazy"
           decoding="async"
-          onMouseEnter={() => product.hoverImage && setSwap(true)}
-          onMouseLeave={() => setSwap(false)}
-          onFocus={() => product.hoverImage && setSwap(true)}
-          onBlur={() => setSwap(false)}
+          onMouseEnter={() => product.hoverImage && handleImageSwap(true)}
+          onMouseLeave={() => handleImageSwap(false)}
+          onFocus={() => product.hoverImage && handleImageSwap(true)}
+          onBlur={() => handleImageSwap(false)}
+          onError={() => setImgSrc(FALLBACK_PRODUCT_IMAGE)}
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
         />
         {(showSaleSticker || product.isNew) ? (
@@ -103,16 +114,20 @@ export function ProductCard({
         <div className="min-h-0">
           <p
             id={labelId}
-            className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500"
+            className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}
           >
             {product.brand}
           </p>
           <Link to={`/product/${product.id}`}>
-            <h3 className="mt-1 line-clamp-2 text-base font-semibold leading-snug text-black transition group-hover:text-brand-red">
+            <h3
+              className={`mt-1 line-clamp-2 text-base font-semibold leading-snug transition group-hover:text-brand-red ${
+                isDark ? 'text-white' : 'text-black'
+              }`}
+            >
               {product.name}
             </h3>
           </Link>
-          <p className="mt-2 text-lg font-semibold tracking-tight text-black">
+          <p className={`mt-2 text-lg font-semibold tracking-tight ${isDark ? 'text-white' : 'text-black'}`}>
             {formatPrice(product.price)}
           </p>
         </div>
@@ -125,7 +140,11 @@ export function ProductCard({
             id={`size-${product.id}`}
             value={size}
             onChange={(e) => setSize(e.target.value)}
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-black transition hover:border-neutral-300"
+            className={`rounded-xl border px-3 py-2 text-sm font-medium transition hover:border-neutral-300 ${
+              isDark
+                ? 'border-white/20 bg-neutral-950 text-white'
+                : 'border-neutral-200 bg-white text-black'
+            }`}
           >
             {product.sizes.map((s) => (
               <option key={s} value={s}>

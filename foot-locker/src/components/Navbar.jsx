@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
 import { useStoreSettings } from '../hooks/useStoreSettings.js';
 import { useCart } from '../hooks/useCart.js';
@@ -8,10 +8,56 @@ import { REWARDS_PROGRAM } from '../config/brand.js';
 import { formatPrice } from '../utils/format.js';
 import { LogoMark } from './LogoMark.jsx';
 import { MegaPanel } from './MegaNav.jsx';
+import { NavSearchForm } from './NavSearchForm.jsx';
+import { megaColumns, navQuickLinks } from '../data/megaNavData.js';
 
 /** Primary site chrome — mega nav, utility strip, quick links */
 
 /** @typedef {'men'|'women'|'kids'|'apparel'|'brands'|'newtrend'|null} MegaActive */
+
+function UtilityDot() {
+  return <span className="nav-utility-dot" aria-hidden />;
+}
+
+/** @param {{ to: string, label: string, accent?: boolean }} props */
+function QuickStripLink({ to, label, accent }) {
+  const { pathname, search, hash } = useLocation();
+  const current = `${pathname}${search}${hash}`;
+  const active = current === to || (to.includes('#') && hash && to.endsWith(hash));
+
+  return (
+    <Link
+      to={to}
+      className={`shrink-0 snap-start rounded-full px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition sm:text-[12px] ${
+        active
+          ? 'bg-neutral-950 text-white shadow-sm'
+          : accent
+            ? 'text-brand-red hover:bg-red-50'
+            : 'text-neutral-700 hover:bg-white hover:text-neutral-950 hover:shadow-sm'
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function MegaChevron({ open }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      className={`ml-0.5 opacity-60 transition ${open ? 'rotate-180' : ''}`}
+      aria-hidden
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
 
 export function Navbar() {
   const { itemCount, openDrawer, drawerOpen } = useCart();
@@ -19,10 +65,10 @@ export function Navbar() {
   const { isLoggedIn, logout } = useAuth();
   const { settings } = useStoreSettings();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mega, setMega] = useState(/** @type {MegaActive} */ (null));
   const closeTimer = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
   const location = useLocation();
-  const navigate = useNavigate();
 
   const closeMega = useCallback(() => setMega(null), [setMega]);
 
@@ -56,22 +102,24 @@ export function Navbar() {
   }, [closeMega]);
 
   return (
-    <header className="sticky top-0 z-[60] shadow-sm">
-      <div className="bg-neutral-950 text-[11px] font-medium text-neutral-300">
-        <div className="mx-auto flex max-w-[1440px] flex-col items-start justify-between gap-2 px-4 py-2 sm:flex-row sm:items-center sm:px-6 lg:px-8">
-          <p className="uppercase tracking-wider text-neutral-300">
-            <span className="font-semibold text-brand-red">Free delivery</span>
-            {' '}
-            on orders over {formatPrice(settings.free_shipping_threshold)} —
-            {settings.country} nationwide
+    <header className="sticky top-0 z-[60] shadow-[0_1px_0_rgb(0_0_0_/_0.06)]">
+      {/* Utility strip */}
+      <div className="border-b border-white/5 bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 text-[11px] font-medium text-neutral-300">
+        <div className="mx-auto flex max-w-[1440px] flex-col items-start justify-between gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:px-6 lg:px-8">
+          <p className="flex flex-wrap items-center gap-x-2 uppercase tracking-wider">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-red" aria-hidden />
+              Free delivery
+            </span>
+            <span className="text-neutral-400">
+              Orders over {formatPrice(settings.free_shipping_threshold)} · {settings.country}
+            </span>
           </p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 sm:items-center">
+          <div className="flex flex-wrap items-center gap-y-1">
             <Link to="/stores" className="transition hover:text-white">
               Find a store
             </Link>
-            <span className="hidden text-neutral-600 sm:inline" aria-hidden>
-              |
-            </span>
+            <UtilityDot />
             {isLoggedIn ? (
               <Link to="/account" className="transition hover:text-white">
                 My account
@@ -81,25 +129,18 @@ export function Navbar() {
                 Sign in
               </Link>
             )}
-            <span className="hidden text-neutral-600 sm:inline" aria-hidden>
-              |
-            </span>
-            <Link to="/wishlist" className="transition hover:text-white">
+            <UtilityDot />
+            <Link to="/wishlist" className="inline-flex items-center gap-1 transition hover:text-white">
               Wishlist
               {wishlistCount > 0 ? (
-                <span className="ml-1 rounded-full bg-white/15 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+                <span className="rounded-full bg-brand-red px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
                   {wishlistCount > 99 ? '99+' : wishlistCount}
                 </span>
               ) : null}
             </Link>
-            <span className="hidden text-neutral-600 sm:inline" aria-hidden>
-              |
-            </span>
             {isLoggedIn ? (
               <>
-                <span className="hidden text-neutral-600 sm:inline" aria-hidden>
-                  |
-                </span>
+                <UtilityDot />
                 <button
                   type="button"
                   onClick={logout}
@@ -108,36 +149,25 @@ export function Navbar() {
                   Sign out
                 </button>
               </>
-            ) : (
-              <>
-                <span className="hidden text-neutral-600 sm:inline" aria-hidden>
-                  |
-                </span>
-                <Link to="/account" className="transition hover:text-white">
-                  Account
-                </Link>
-              </>
-            )}
-            <span className="text-neutral-600" aria-hidden>
-              |
-            </span>
+            ) : null}
+            <UtilityDot />
             <Link
               to="/rewards"
               className="font-semibold text-white transition hover:text-brand-red"
             >
-              Join {REWARDS_PROGRAM}
+              {REWARDS_PROGRAM}
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Primary */}
+      {/* Primary + quick strip */}
       <div
-        className="relative bg-white"
+        className={`relative bg-white transition-shadow ${mega ? 'shadow-lg' : ''}`}
         onMouseLeave={scheduleClose}
       >
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
-          <LogoMark variant="nav" />
+        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
+          <LogoMark variant="nav" className="gap-2.5" />
 
           <nav
             className="hidden items-stretch gap-0 lg:flex"
@@ -154,7 +184,7 @@ export function Navbar() {
               <button
                 key={item.key}
                 type="button"
-                className={`border-b-[3px] px-4 py-6 text-[13px] font-bold uppercase tracking-tight transition hover:bg-neutral-50 [font-stretch:condensed] ${
+                className={`inline-flex items-center border-b-[3px] px-3 py-4 text-[13px] font-bold uppercase tracking-tight transition hover:bg-neutral-50 [font-stretch:condensed] ${
                   mega === item.key
                     ? 'border-brand-red text-neutral-950'
                     : 'border-transparent text-neutral-800'
@@ -165,19 +195,28 @@ export function Navbar() {
                 onMouseEnter={() => openMega(item.key)}
               >
                 {item.label}
+                <MegaChevron open={mega === item.key} />
               </button>
             ))}
 
-            <Link
-              to="/apparel"
-              className="flex items-center border-b-[3px] border-transparent px-4 py-6 text-[13px] font-bold uppercase tracking-tight text-neutral-800 [font-stretch:condensed] transition hover:border-brand-red hover:bg-neutral-50"
+            <button
+              type="button"
+              className={`inline-flex items-center border-b-[3px] px-3 py-4 text-[13px] font-bold uppercase tracking-tight [font-stretch:condensed] ${
+                mega === 'apparel'
+                  ? 'border-brand-red text-neutral-950'
+                  : 'border-transparent text-neutral-800 hover:bg-neutral-50'
+              }`}
+              aria-expanded={mega === 'apparel'}
+              onFocus={() => openMega('apparel')}
+              onMouseEnter={() => openMega('apparel')}
             >
               Apparel
-            </Link>
+              <MegaChevron open={mega === 'apparel'} />
+            </button>
 
             <Link
               to="/sale"
-              className="flex items-center border-b-[3px] border-transparent px-4 py-6 text-[13px] font-bold uppercase tracking-tight text-brand-red [font-stretch:condensed] transition hover:bg-red-50"
+              className="flex items-center border-b-[3px] border-transparent px-3 py-4 text-[13px] font-bold uppercase tracking-tight text-brand-red [font-stretch:condensed] transition hover:bg-red-50"
             >
               Sale
             </Link>
@@ -185,7 +224,7 @@ export function Navbar() {
             <NavLink
               to="/releases"
               className={({ isActive }) =>
-                `flex items-center border-b-[3px] px-4 py-6 text-[13px] font-bold uppercase tracking-tight [font-stretch:condensed] ${
+                `flex items-center border-b-[3px] px-3 py-4 text-[13px] font-bold uppercase tracking-tight [font-stretch:condensed] ${
                   isActive
                     ? 'border-brand-red text-neutral-950'
                     : 'border-transparent text-neutral-800 hover:bg-neutral-50'
@@ -197,7 +236,7 @@ export function Navbar() {
 
             <button
               type="button"
-              className={`border-b-[3px] px-4 py-6 text-[13px] font-bold uppercase tracking-tight [font-stretch:condensed] ${
+              className={`inline-flex items-center border-b-[3px] px-3 py-4 text-[13px] font-bold uppercase tracking-tight [font-stretch:condensed] ${
                 mega === 'brands'
                   ? 'border-brand-red text-neutral-950'
                   : 'border-transparent text-neutral-800 hover:bg-neutral-50'
@@ -207,11 +246,12 @@ export function Navbar() {
               onMouseEnter={() => openMega('brands')}
             >
               Brands
+              <MegaChevron open={mega === 'brands'} />
             </button>
 
             <button
               type="button"
-              className={`border-b-[3px] px-4 py-6 text-[13px] font-bold uppercase tracking-tight [font-stretch:condensed] ${
+              className={`inline-flex items-center border-b-[3px] px-3 py-4 text-[13px] font-bold uppercase tracking-tight [font-stretch:condensed] ${
                 mega === 'newtrend'
                   ? 'border-brand-red text-neutral-950'
                   : 'border-transparent text-neutral-800 hover:bg-neutral-50'
@@ -221,64 +261,21 @@ export function Navbar() {
               onMouseEnter={() => openMega('newtrend')}
             >
               New &amp; trending
+              <MegaChevron open={mega === 'newtrend'} />
             </button>
           </nav>
 
-          <form
-            key={
-              location.pathname === '/search'
-                ? `nav-search-${location.search}`
-                : 'nav-search'
-            }
-            className="mx-2 hidden min-w-0 max-w-md flex-1 lg:block"
-            role="search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const q = String(
-                new FormData(e.currentTarget).get('q') ?? '',
-              ).trim();
-              navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
-            }}
-          >
-            <label htmlFor="nav-site-search" className="sr-only">
-              Search products
-            </label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m21 21-4-4" />
-                </svg>
-              </span>
-              <input
-                id="nav-site-search"
-                name="q"
-                type="search"
-                defaultValue={
-                  location.pathname === '/search'
-                    ? new URLSearchParams(location.search).get('q') ?? ''
-                    : ''
-                }
-                placeholder="Search brands, styles…"
-                className="h-10 w-full rounded-full border border-neutral-200 bg-neutral-50 py-2 pl-9 pr-3 text-sm text-neutral-900 shadow-inner outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white focus:ring-2 focus:ring-black/10"
-              />
-            </div>
-          </form>
+          <NavSearchForm className="mx-2 hidden min-w-0 max-w-md flex-1 lg:block" />
 
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            <Link
-              to="/search"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 text-neutral-900 transition hover:border-neutral-950 lg:hidden"
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-neutral-900 transition hover:border-neutral-950 lg:hidden"
               aria-label="Search products"
+              onClick={() => {
+                setMobileSearchOpen(true);
+                setMobileOpen(true);
+              }}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -293,11 +290,11 @@ export function Navbar() {
                 <circle cx="11" cy="11" r="7" />
                 <path d="m21 21-4-4" />
               </svg>
-            </Link>
+            </button>
 
             <button
               type="button"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 text-black transition hover:border-neutral-950 sm:h-11 sm:w-11"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-black transition hover:border-neutral-950"
               aria-label={`Cart, ${itemCount} items`}
               aria-expanded={drawerOpen}
               onClick={openDrawer}
@@ -326,7 +323,7 @@ export function Navbar() {
 
             <button
               type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 lg:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 lg:hidden"
               aria-expanded={mobileOpen}
               aria-controls="mobile-fl-nav"
               aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
@@ -358,26 +355,15 @@ export function Navbar() {
         </div>
 
         {/* Quick strip */}
-        <div className="border-t border-neutral-200 bg-neutral-50">
-          <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-1 gap-y-1 px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-800 sm:text-[12px] sm:tracking-wider lg:px-8">
-            {[
-              ["Men's", '/shop?category=men'],
-              ["Women's", '/shop?category=women'],
-              ["Kids'", '/shop?category=kids'],
-              ['Apparel', '/apparel'],
-              ['Stores', '/stores'],
-              ['New arrivals', '/releases'],
-              ['Releases', '/releases'],
-              ['Sale', '/sale'],
-              ['Basketball', '/shop?category=men'],
-            ].map(([label, href]) => (
-              <Link
-                key={label}
-                to={href}
-                className="rounded px-3 py-1.5 transition hover:bg-neutral-200/80"
-              >
-                {label}
-              </Link>
+        <div className="border-t border-neutral-200 bg-neutral-100/90">
+          <div className="nav-quick-strip mx-auto flex max-w-[1440px] snap-x items-center gap-1 overflow-x-auto px-3 py-2 lg:px-8">
+            {navQuickLinks.map((item) => (
+              <QuickStripLink
+                key={item.label}
+                to={item.href}
+                label={item.label}
+                accent={item.accent}
+              />
             ))}
           </div>
         </div>
@@ -388,28 +374,47 @@ export function Navbar() {
           id="mobile-fl-nav"
           className="max-h-[calc(100dvh-8rem)] overflow-y-auto border-t border-neutral-200 bg-white lg:hidden"
         >
+          <div className="border-b border-neutral-100 px-4 py-4">
+            <NavSearchForm
+              autoFocus={mobileSearchOpen}
+              onSubmitted={() => {
+                setMobileOpen(false);
+                setMobileSearchOpen(false);
+              }}
+            />
+          </div>
           <div className="space-y-1 px-4 py-4">
-            <Link
-              to="/shop?category=men"
-              className="block rounded-lg px-3 py-3 font-bold uppercase"
-              onClick={() => setMobileOpen(false)}
-            >
-              Men&apos;s
-            </Link>
-            <Link
-              to="/shop?category=women"
-              className="block rounded-lg px-3 py-3 font-bold uppercase"
-              onClick={() => setMobileOpen(false)}
-            >
-              Women&apos;s
-            </Link>
-            <Link
-              to="/shop?category=kids"
-              className="block rounded-lg px-3 py-3 font-bold uppercase"
-              onClick={() => setMobileOpen(false)}
-            >
-              Kids&apos;
-            </Link>
+            {(
+              /** @type {{ key: MegaActive, label: string, href: string }[]} */ ([
+                { key: 'men', label: "Men's", href: '/shop?category=men&type=shoes' },
+                { key: 'women', label: "Women's", href: '/shop?category=women&type=shoes' },
+                { key: 'kids', label: "Kids'", href: '/shop?category=kids&type=shoes' },
+              ])
+            ).map((item) => (
+              <div key={item.key} className="rounded-xl border border-neutral-100">
+                <Link
+                  to={item.href}
+                  className="block px-3 py-3 font-bold uppercase"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {item.label}
+                </Link>
+                <div className="grid grid-cols-2 gap-1 border-t border-neutral-100 px-2 pb-2 pt-1">
+                  {(megaColumns[item.key] ?? []).flatMap((col) =>
+                    col.links.slice(0, 2).map((link) => (
+                      <Link
+                        key={`${item.key}-${link.title}`}
+                        to={link.href}
+                        className="rounded-lg px-2 py-2 text-[12px] font-medium text-neutral-600 hover:bg-neutral-50"
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        {link.title}
+                      </Link>
+                    )),
+                  )}
+                </div>
+              </div>
+            ))}
             <Link
               to="/apparel"
               className="block rounded-lg px-3 py-3 font-bold uppercase"
@@ -432,11 +437,11 @@ export function Navbar() {
               Releases
             </Link>
             <Link
-              to="/shop"
+              to="/shop?type=shoes"
               className="block rounded-lg px-3 py-3 font-bold uppercase"
               onClick={() => setMobileOpen(false)}
             >
-              Shop all
+              Shop all shoes
             </Link>
             <NavLink
               to="/stores"
@@ -464,13 +469,6 @@ export function Navbar() {
                 Sign out
               </button>
             ) : null}
-            <Link
-              to="/search"
-              className="block rounded-lg px-3 py-3 font-bold uppercase"
-              onClick={() => setMobileOpen(false)}
-            >
-              Search
-            </Link>
             <Link
               to="/wishlist"
               className="block rounded-lg px-3 py-3 font-bold uppercase"

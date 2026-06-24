@@ -30,8 +30,173 @@
   }
 }
 
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 .animate-fade-rise {
   animation: fade-rise 0.55s ease-out both;
+}
+
+/* Hero carousel */
+.hero-carousel {
+  min-height: calc(100svh - var(--storefront-nav-height));
+}
+
+@keyframes heroKenBurns {
+  from {
+    transform: scale(1.06);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes heroContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.hero-ken-burns {
+  animation: heroKenBurns 8s ease-out forwards;
+}
+
+.hero-content-in {
+  animation: heroContentIn 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hero-progress-bar {
+  animation: heroProgress linear forwards;
+  width: 0%;
+}
+
+.hero-nav-btn {
+  @apply flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-md transition hover:scale-105 hover:border-white/40 hover:bg-black/60 active:scale-95;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-ken-burns,
+  .hero-content-in,
+  .hero-progress-bar,
+  .hero-slide-bg {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* GOAT-style brand shoe icon wall */
+.brand-shoe-wall {
+  --brand-wall-cols: 4;
+  --brand-wall-cell: 4.5rem;
+  display: grid;
+  grid-template-columns: repeat(var(--brand-wall-cols), minmax(0, 1fr));
+  gap: 1px;
+  background: #e5e5e5;
+}
+
+@media (min-width: 640px) {
+  .brand-shoe-wall {
+    --brand-wall-cols: 6;
+    --brand-wall-cell: 5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .brand-shoe-wall {
+    --brand-wall-cols: 8;
+  }
+}
+
+@media (min-width: 1024px) {
+  .brand-shoe-wall {
+    --brand-wall-cols: 11;
+    --brand-wall-cell: 5.25rem;
+  }
+}
+
+.brand-shoe-wall--cropped {
+  max-height: calc(var(--brand-wall-cell) * 3 + 2px);
+  overflow: hidden;
+}
+
+.brand-shoe-wall__cell {
+  position: relative;
+  display: flex;
+  aspect-ratio: 1.2 / 1;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  padding: 0.65rem 0.4rem;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.brand-shoe-wall__cell:hover,
+.brand-shoe-wall__cell:focus-visible {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06);
+  z-index: 1;
+}
+
+.brand-shoe-wall__cell img {
+  max-height: calc(var(--brand-wall-cell) - 0.5rem);
+  width: 100%;
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.08));
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brand-shoe-wall__cell:hover img,
+.brand-shoe-wall__cell:focus-visible img {
+  transform: scale(1.1) translateY(-2px);
+}
+
+.brand-shoe-wall__label {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 1rem 0.2rem 0.3rem;
+  text-align: center;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: transparent;
+  background: linear-gradient(to top, rgb(250 250 250 / 0.98), transparent);
+  transition: color 0.2s ease;
+}
+
+.brand-shoe-wall__cell:hover .brand-shoe-wall__label,
+.brand-shoe-wall__cell:focus-visible .brand-shoe-wall__label {
+  color: rgb(23 23 23 / 0.85);
+}
+
+.brand-shoe-wall__skeleton {
+  aspect-ratio: 1.2 / 1;
+  background: #f0f0f0;
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
 /* Admin console */
@@ -56,9 +221,45 @@
     linear-gradient(180deg, #f8f9fb 0%, #eef0f4 100%);
 }
 
+.admin-stat-card {
+  @apply rounded-2xl border border-neutral-200/80 bg-white p-5 shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-card-hover)];
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
+  }
+
+  :root {
+    /* Sticky storefront header (utility + logo row + quick strip) */
+    --storefront-nav-height: 8.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    :root {
+      --storefront-nav-height: 9.25rem;
+    }
+  }
+
+  .nav-utility-dot {
+    @apply mx-2 hidden h-1 w-1 shrink-0 rounded-full bg-neutral-600 sm:inline-block;
+  }
+
+  .nav-mega-heading {
+    @apply flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-400;
+  }
+
+  .nav-mega-heading::before {
+    content: '';
+    @apply h-3 w-0.5 shrink-0 rounded-full bg-brand-red;
+  }
+
+  .nav-quick-strip {
+    scrollbar-width: none;
+  }
+
+  .nav-quick-strip::-webkit-scrollbar {
+    display: none;
   }
 
   body {

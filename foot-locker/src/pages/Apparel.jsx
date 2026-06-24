@@ -179,7 +179,7 @@ export function Apparel() {
                 Shop shoes
               </Link>
               <Link
-                to="/releases"
+                to="/shop?new=1&sort=newest"
                 className="inline-flex bg-brand-red px-5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white transition hover:bg-brand-red-hover"
               >
                 New arrivals

@@ -40,6 +40,12 @@ class Config:
     MPESA_SHORTCODE = os.getenv('MPESA_SHORTCODE')
     MPESA_PASSKEY = os.getenv('MPESA_PASSKEY')
     MPESA_CALLBACK_URL = os.getenv('MPESA_CALLBACK_URL')
+    # Common misconfiguration: ngrok base + /callback instead of /payments/callback
+    if MPESA_CALLBACK_URL and MPESA_CALLBACK_URL.rstrip('/').endswith('/callback'):
+        if '/payments/' not in MPESA_CALLBACK_URL:
+            MPESA_CALLBACK_URL = MPESA_CALLBACK_URL.rstrip('/').replace(
+                '/callback', '/payments/callback'
+            )
     MPESA_ENVIRONMENT = os.getenv('MPESA_ENVIRONMENT', 'sandbox')
     MPESA_TRANSACTION_TYPE = os.getenv('MPESA_TRANSACTION_TYPE', 'CustomerPayBillOnline')
 
@@ -72,6 +78,8 @@ class Config:
         ).split(',')
         if origin.strip()
     ]
+
+    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 
     # Ensure upload folder exists
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)

@@ -3,11 +3,10 @@ import { Link } from 'react-router-dom';
 import { useToast } from '../hooks/useToast.js';
 import { useStoreSettings } from '../hooks/useStoreSettings.js';
 import { subscribeNewsletter } from '../utils/api.js';
-import {
-  COMPANY_NAME,
-  REWARDS_PROGRAM,
-} from '../config/brand.js';
+import { COMPANY_NAME, TAGLINE } from '../config/brand.js';
+import { footerColumns, footerQuickLinks } from '../config/footerLinks.js';
 import { LogoMark } from './LogoMark.jsx';
+import { DeveloperCredit } from './DeveloperCredit.jsx';
 
 const social = [
   {
@@ -33,135 +32,110 @@ const social = [
   },
 ];
 
-const footCol = /** @type {const} */ ([
-  {
-    title: 'Help',
-    links: [
-      ['Contact us', '/support#contact'],
-      ['Order status', '/account/orders'],
-      ['Shipping info', '/support#shipping'],
-      ['Store pickup', '/support#pickup'],
-      ['Returns & exchanges', '/support#returns'],
-    ],
-  },
-  {
-    title: 'About',
-    links: [
-      ['Our story', '/support#about'],
-      ['Careers', '/support#careers'],
-      ['Affiliates', '/support#affiliates'],
-    ],
-  },
-  {
-    title: 'Shop',
-    links: [
-      ['Gift cards', '/support#gift-cards'],
-      ['Coupons & sale', '/sale'],
-      ['Store locator', '/stores'],
-      ["Men's shoes", '/shop?category=men'],
-      ["Women's shoes", '/shop?category=women'],
-      ["Kids' shoes", '/shop?category=kids'],
-      ['Apparel', '/apparel'],
-      ['Hoodies', '/apparel?style=hoodies'],
-      ['Sale apparel', '/apparel'],
-    ],
-  },
-  {
-    title: 'Legal information',
-    links: [
-      ['Terms of use', '/support#terms'],
-      ['Privacy', '/support#privacy'],
-      ['Accessibility', '/support#accessibility'],
-    ],
-  },
-]);
+const footCol = footerColumns;
+
+/** @param {{ href: string, label: string }} props */
+function FooterLink({ href, label }) {
+  const cls =
+    'group inline-flex items-center gap-1.5 text-sm text-neutral-600 transition hover:text-neutral-950';
+  const arrow = (
+    <span
+      aria-hidden
+      className="text-neutral-300 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100 group-hover:text-brand-red"
+    >
+      →
+    </span>
+  );
+
+  if (href.startsWith('/')) {
+    return (
+      <Link to={href} className={cls}>
+        {label}
+        {arrow}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={cls}>
+      {label}
+      {arrow}
+    </a>
+  );
+}
 
 export function Footer() {
   const { show } = useToast();
   const { settings } = useStoreSettings();
   const [email, setEmail] = useState('');
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsSuccess, setNewsSuccess] = useState('');
+  const [newsError, setNewsError] = useState('');
+
+  const supportEmail = settings.support_email || 'hello@shoelocker.ke';
 
   async function onNewsletterSubmit(e) {
     e.preventDefault();
     const v = email.trim();
     if (!v) return;
+    setNewsLoading(true);
+    setNewsError('');
+    setNewsSuccess('');
     try {
       const result = await subscribeNewsletter(v);
-      show(result.message || `Subscribed — we'll email ${v} with Kenya drops.`, 'success');
+      const msg =
+        result.message || `You're on the list — drops and restocks headed to ${v}.`;
+      setNewsSuccess(msg);
+      show(msg, 'success');
       setEmail('');
     } catch (err) {
-      show(err instanceof Error ? err.message : 'Could not subscribe', 'error');
+      const msg = err instanceof Error ? err.message : 'Could not subscribe';
+      setNewsError(msg);
+      show(msg, 'error');
+    } finally {
+      setNewsLoading(false);
     }
   }
 
   return (
-    <footer className="mt-auto bg-neutral-100">
-      <div className="border-t border-neutral-200 bg-neutral-50">
-        <div className="mx-auto max-w-[1440px] space-y-6 px-4 py-12 lg:px-8">
-          <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-xl">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-red">
-                {REWARDS_PROGRAM}
-              </p>
-              <p className="mt-3 text-xl font-[800] uppercase tracking-tighter text-neutral-950 [font-stretch:condensed]">
-                Earn points on footwear &amp; gear
-              </p>
-              <p className="mt-2 text-sm text-neutral-600">
-                Members get perks on every qualifying purchase.* Join free with
-                your {COMPANY_NAME} account — same login as checkout when we wire
-                payments.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                to="/rewards"
-                className="inline-flex items-center rounded-full border border-neutral-900 bg-neutral-950 px-5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white transition hover:bg-neutral-800"
-              >
-                How it works
-              </Link>
-              <Link
-                to="/rewards"
-                className="inline-flex items-center border-2 border-neutral-900 px-5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-neutral-950 transition hover:bg-neutral-950 hover:text-white"
-              >
-                Join free
-              </Link>
-            </div>
-          </div>
-          <p className="text-xs text-neutral-500">
-            *Reward rules apply; see{' '}
-            <Link to="/rewards" className="underline">
-              {REWARDS_PROGRAM}
-            </Link>{' '}
-            for tier details once live.
-          </p>
-        </div>
-      </div>
-
-      <div className="border-t border-neutral-300 bg-neutral-100">
-        <div className="mx-auto grid max-w-[1440px] gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-6 lg:px-8">
+    <footer className="mt-auto">
+      {/* Link grid */}
+      <div className="border-t border-neutral-200 bg-neutral-100">
+        <div
+          className="pointer-events-none h-1 w-full bg-gradient-to-r from-brand-red via-brand-red/40 to-transparent"
+          aria-hidden
+        />
+        <div className="mx-auto grid max-w-[1440px] gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-6 lg:gap-8 lg:px-8 lg:py-16">
           <div className="lg:col-span-2">
-            <LogoMark variant="footer" showTagline={false} />
-            <p className="mt-4 text-sm leading-relaxed text-neutral-700">
+            <Link to="/" className="inline-block transition opacity-100 hover:opacity-90">
+              <LogoMark variant="footer" showTagline={false} />
+            </Link>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+              {TAGLINE}
+            </p>
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-neutral-600">
               {COMPANY_NAME} curates performance and lifestyle sneakers with a
               wall-worthy shopping experience. Product names and logos belong to
               their respective owners.
             </p>
-            <p className="mt-3 text-sm">
+            <p className="mt-4">
               <a
-                href={`mailto:${settings.support_email}`}
-                className="font-semibold text-brand-red hover:underline"
+                href={`mailto:${supportEmail}`}
+                className="inline-flex items-center gap-2 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition hover:border-neutral-950 hover:shadow"
               >
-                {settings.support_email}
+                <span className="text-brand-red" aria-hidden>
+                  ✉
+                </span>
+                {supportEmail}
               </a>
             </p>
-            <div className="mt-5 flex gap-3">
+            <div className="mt-6 flex gap-2.5">
               {social.map((s) => (
                 <a
                   key={s.name}
                   href={s.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 bg-white text-black transition hover:border-neutral-950"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-800 shadow-sm transition hover:-translate-y-0.5 hover:border-neutral-950 hover:shadow-md"
                   aria-label={s.name}
                 >
                   <svg
@@ -181,80 +155,180 @@ export function Footer() {
 
           {footCol.map((col) => (
             <div key={col.title}>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-950">
+              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-neutral-950">
+                <span className="h-3 w-0.5 rounded-full bg-brand-red" aria-hidden />
                 {col.title}
               </p>
-              <ul className="mt-4 space-y-2.5 text-sm">
+              <ul className="mt-4 space-y-2.5">
                 {col.links.map(([label, href]) => (
                   <li key={label}>
-                    {href.startsWith('/') ? (
-                      <Link
-                        to={href}
-                        className="text-neutral-700 transition hover:text-black hover:underline"
-                      >
-                        {label}
-                      </Link>
-                    ) : (
-                      <a href={href} className="text-neutral-700 transition hover:text-black">
-                        {label}
-                      </a>
-                    )}
+                    <FooterLink href={href} label={label} />
                   </li>
                 ))}
               </ul>
             </div>
           ))}
         </div>
+      </div>
 
-        <div className="border-t border-neutral-300 bg-white">
-          <div className="mx-auto max-w-[1440px] px-4 py-10 lg:px-8">
-            <div className="flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-6 sm:flex-row sm:items-end sm:justify-between">
-              <div className="max-w-md">
-                <p className="text-xs font-bold uppercase tracking-widest text-brand-red">
-                  Newsletter
-                </p>
-                <p className="mt-2 text-lg font-bold text-neutral-950">
-                  Nairobi drops &amp; coast restocks
-                </p>
-                <p className="mt-1 text-sm text-neutral-600">
-                  One email on release weeks — no spam. Unsubscribe anytime once we ship
-                  preferences.
-                </p>
-              </div>
-              <form
-                className="flex w-full max-w-md flex-col gap-2 sm:flex-row sm:items-center"
-                onSubmit={onNewsletterSubmit}
-              >
-                <label htmlFor="footer-news-email" className="sr-only">
-                  Email for newsletter
-                </label>
-                <input
-                  id="footer-news-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.ke"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-black focus:ring-2 focus:ring-black/10"
-                />
-                <button
-                  type="submit"
-                  className="shrink-0 rounded-full bg-neutral-950 px-6 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800"
+      {/* Newsletter */}
+      <div className="relative overflow-hidden border-t border-neutral-800 bg-neutral-950 text-white">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-50"
+          aria-hidden
+          style={{
+            background:
+              'radial-gradient(ellipse 55% 80% at 100% 50%, rgb(230 0 18 / 0.22), transparent 60%), radial-gradient(ellipse 40% 60% at 0% 100%, rgb(255 255 255 / 0.04), transparent 50%)',
+          }}
+        />
+        <div className="relative mx-auto max-w-[1440px] px-4 py-12 sm:px-6 lg:px-8 lg:py-14">
+          <div className="grid items-center gap-10 lg:grid-cols-12 lg:gap-12">
+            <div className="lg:col-span-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-brand-red">
+                Newsletter
+              </p>
+              <h2 className="mt-2 font-[800] uppercase leading-[0.95] tracking-tighter [font-stretch:condensed] sm:text-3xl">
+                Nairobi drops
+                <span className="block text-white/90">&amp; coast restocks</span>
+              </h2>
+              <p className="mt-4 max-w-md text-sm leading-relaxed text-neutral-400">
+                One email on release weeks — heat alerts, restock pings, and member
+                perks. No spam; unsubscribe when preferences ship.
+              </p>
+              <ul className="mt-6 flex flex-wrap gap-2">
+                {['Drop alerts', 'KES pricing', 'Kenya-wide'].map((tag) => (
+                  <li
+                    key={tag}
+                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-300"
+                  >
+                    {tag}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="lg:col-span-7">
+              {newsSuccess ? (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-6 py-8 text-center lg:text-left">
+                  <p className="font-semibold text-emerald-300">You&apos;re subscribed</p>
+                  <p className="mt-2 text-sm text-neutral-300">{newsSuccess}</p>
+                  <button
+                    type="button"
+                    onClick={() => setNewsSuccess('')}
+                    className="mt-5 text-[12px] font-bold uppercase tracking-wide text-white/70 hover:text-white"
+                  >
+                    Subscribe another email
+                  </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={onNewsletterSubmit}
+                  className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm sm:p-8"
                 >
-                  Subscribe
-                </button>
-              </form>
+                  {newsError ? (
+                    <p className="mb-4 rounded-xl bg-red-500/15 px-3 py-2 text-sm text-red-300">
+                      {newsError}
+                    </p>
+                  ) : null}
+                  <label
+                    htmlFor="footer-news-email"
+                    className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400"
+                  >
+                    Email address
+                  </label>
+                  <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                    <input
+                      id="footer-news-email"
+                      name="email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      placeholder="you@example.ke"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={newsLoading}
+                      className="min-w-0 flex-1 rounded-xl border border-white/15 bg-neutral-900 px-4 py-3.5 text-sm text-white shadow-inner outline-none transition placeholder:text-neutral-500 focus:border-brand-red/50 focus:ring-2 focus:ring-brand-red/20 disabled:opacity-60"
+                    />
+                    <button
+                      type="submit"
+                      disabled={newsLoading}
+                      className="shrink-0 rounded-full bg-brand-red px-8 py-3.5 text-[13px] font-bold uppercase tracking-wide text-white transition hover:bg-brand-red-hover disabled:opacity-60"
+                    >
+                      {newsLoading ? 'Joining…' : 'Subscribe'}
+                    </button>
+                  </div>
+                  <p className="mt-4 text-[11px] leading-relaxed text-neutral-500">
+                    By subscribing you agree to receive marketing email from {COMPANY_NAME}.
+                    Saved to our subscriber list via the store API.
+                  </p>
+                </form>
+              )}
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="border-t border-neutral-300 bg-white">
-          <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-4 py-8 text-xs text-neutral-600 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-            <p>© {new Date().getFullYear()} {COMPANY_NAME}. All rights reserved.</p>
-            <p className="max-w-xl">
-              Prices and availability shown in this storefront are for demonstration.
-            </p>
+      {/* Bottom bar */}
+      <div className="border-t border-neutral-200 bg-white">
+        <div
+          className="h-px w-full bg-gradient-to-r from-brand-red/60 via-brand-red/20 to-transparent"
+          aria-hidden
+        />
+        <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+          <nav
+            aria-label="Footer quick links"
+            className="flex flex-wrap items-center justify-center gap-2 border-b border-neutral-100 pb-6 sm:justify-start"
+          >
+            {footerQuickLinks.map(([label, href]) => (
+              <Link
+                key={label}
+                to={href}
+                className="rounded-full border border-neutral-200 bg-neutral-50 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-neutral-700 transition hover:border-neutral-400 hover:bg-white hover:text-neutral-950 hover:shadow-sm"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="mt-6 grid gap-8 lg:grid-cols-12 lg:items-center">
+            <div className="lg:col-span-4">
+              <p className="text-sm font-[800] uppercase tracking-tight text-neutral-950 [font-stretch:condensed]">
+                © {new Date().getFullYear()} {COMPANY_NAME}
+              </p>
+              <p className="mt-1 text-xs text-neutral-500">
+                All rights reserved. Product names and logos are trademarks of
+                their respective owners.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2 lg:col-span-4 lg:justify-center">
+              {[
+                { label: 'Prices in KES', accent: true },
+                { label: settings.country || 'Kenya', accent: false },
+                { label: 'Live catalog', accent: false },
+              ].map((chip) => (
+                <span
+                  key={chip.label}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] ${
+                    chip.accent
+                      ? 'border-brand-red/25 bg-brand-red/5 text-brand-red'
+                      : 'border-neutral-200 bg-neutral-50 text-neutral-600'
+                  }`}
+                >
+                  {chip.accent ? (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-brand-red"
+                      aria-hidden
+                    />
+                  ) : null}
+                  {chip.label}
+                </span>
+              ))}
+            </div>
+
+            <div className="text-center lg:col-span-4 lg:text-right">
+              <DeveloperCredit variant="muted" className="inline-block" />
+            </div>
           </div>
         </div>
       </div>

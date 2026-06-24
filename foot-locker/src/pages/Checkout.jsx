@@ -51,6 +51,49 @@ export function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [mpesaStep, setMpesaStep] = useState('');
   const [error, setError] = useState('');
+  const [pendingMpesaOrder, setPendingMpesaOrder] = useState(
+    /** @type {{ orderId: number, displayId: string, amount: number, phone: string } | null} */ (null),
+  );
+
+  async function runMpesaPayment(orderId, phoneNumber, amount) {
+    setMpesaStep('Sending M-Pesa prompt to your phone…');
+    const stk = await initiateMpesaPayment({
+      phone_number: phoneNumber,
+      order_id: orderId,
+      amount: Number(amount),
+    });
+    if (stk.checkout_request_id) {
+      setMpesaStep('Waiting for M-Pesa confirmation…');
+      await pollMpesaPaymentStatus(stk.checkout_request_id);
+    }
+  }
+
+  async function retryMpesaPayment() {
+    if (!pendingMpesaOrder) return;
+    setSubmitting(true);
+    setError('');
+    setMpesaStep('');
+    try {
+      await runMpesaPayment(
+        pendingMpesaOrder.orderId,
+        pendingMpesaOrder.phone,
+        pendingMpesaOrder.amount,
+      );
+      setPendingMpesaOrder(null);
+      setLastOrderId(pendingMpesaOrder.displayId);
+      setPlaced(true);
+      show(`Payment confirmed — ${pendingMpesaOrder.displayId}`, 'success');
+      const redirect = searchParams.get('from') || '/account/orders';
+      setTimeout(() => navigate(redirect), 2200);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'M-Pesa payment failed';
+      setError(message);
+      show(message, 'error');
+    } finally {
+      setSubmitting(false);
+      setMpesaStep('');
+    }
+  }
 
   const appliedCode = couponApplied?.code || couponCode.trim().toUpperCase() || '';
 
@@ -173,23 +216,30 @@ export function Checkout() {
       const result = await checkoutOrder(payload);
       const orderId = result.order_id;
       const id = orderId ? `ORD-${String(orderId).padStart(3, '0')}` : 'confirmed';
+      clearCart();
 
       if (paymentMethod === 'mpesa') {
-        setMpesaStep('Sending M-Pesa prompt to your phone…');
-        const stk = await initiateMpesaPayment({
-          phone_number: phone,
-          order_id: orderId,
-          amount: Number(result.total_amount),
-        });
-        if (stk.checkout_request_id) {
-          setMpesaStep('Waiting for M-Pesa confirmation…');
-          await pollMpesaPaymentStatus(stk.checkout_request_id);
+        try {
+          await runMpesaPayment(orderId, phone, result.total_amount);
+        } catch (mpesaErr) {
+          const message =
+            mpesaErr instanceof Error ? mpesaErr.message : 'M-Pesa payment failed';
+          setPendingMpesaOrder({
+            orderId,
+            displayId: id,
+            amount: Number(result.total_amount),
+            phone,
+          });
+          setError(
+            `Order ${id} was created, but M-Pesa could not start: ${message}. Tap retry below — your cart is already saved as an order.`,
+          );
+          show('Order placed — retry M-Pesa payment', 'error');
+          return;
         }
       }
 
       setLastOrderId(id);
       setPlaced(true);
-      clearCart();
       show(`Order confirmed — ${id}`, 'success');
       const redirect = searchParams.get('from') || '/account/orders';
       setTimeout(() => navigate(redirect), 2200);
@@ -209,7 +259,7 @@ export function Checkout() {
   const orderTotal = Number(totals?.total_amount ?? subtotal);
   const freeThreshold = Number(storeSettings?.free_shipping_threshold ?? totals?.free_shipping_threshold ?? 12000);
 
-  if (items.length === 0 && !placed) {
+  if (items.length === 0 && !placed && !pendingMpesaOrder) {
     return (
       <div className="mx-auto max-w-xl px-4 py-16 sm:px-6 lg:px-8">
         <EmptyState title="Nothing to checkout" description="Add sneakers to your cart before completing an order.">
@@ -217,6 +267,51 @@ export function Checkout() {
             Continue shopping
           </Link>
         </EmptyState>
+      </div>
+    );
+  }
+
+  if (pendingMpesaOrder && !placed) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-24 sm:px-6 lg:px-8">
+        <div className="animate-fade-rise rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-[var(--shadow-card)]">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-800">
+            Payment pending
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold text-neutral-950">
+            Complete M-Pesa for {pendingMpesaOrder.displayId}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-neutral-700">
+            Your order is saved. We&apos;ll send an STK push to{' '}
+            <span className="font-semibold">{pendingMpesaOrder.phone}</span> for{' '}
+            <span className="font-semibold">{formatPrice(pendingMpesaOrder.amount)}</span>.
+          </p>
+          {error ? (
+            <p className="mt-4 rounded-xl bg-red-100 px-4 py-3 text-sm text-red-800">{error}</p>
+          ) : null}
+          {mpesaStep ? (
+            <p className="mt-4 rounded-xl bg-sky-100 px-4 py-3 text-sm text-sky-900">{mpesaStep}</p>
+          ) : null}
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void retryMpesaPayment()}
+              className="rounded-full bg-brand-red px-6 py-3 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-brand-red-hover disabled:opacity-60"
+            >
+              {submitting ? 'Retrying…' : 'Retry M-Pesa payment'}
+            </button>
+            <Link
+              to="/account/orders"
+              className="inline-flex items-center rounded-full border border-neutral-300 bg-white px-6 py-3 text-sm font-semibold text-neutral-800 transition hover:border-neutral-950"
+            >
+              View my orders
+            </Link>
+          </div>
+          <p className="mt-4 text-xs text-neutral-600">
+            Sandbox tip: use Safaricom test number 254708374149 if prompted.
+          </p>
+        </div>
       </div>
     );
   }

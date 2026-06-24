@@ -1,9 +1,11 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import  jwt_required, get_jwt_identity, create_access_token, create_refresh_token
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+import secrets
 from extensions import db
-from models import User, UserRole
+from models import User, UserRole, PasswordResetToken
 
 # Blueprint Configuration
 users_bp = Blueprint('auth', __name__)
@@ -333,6 +335,94 @@ def register():
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "An error occurred while creating the user", "details": str(e)}), 500
+
+
+@users_bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """Issue a one-hour reset token. Always returns the same message (no email enumeration)."""
+    data = request.get_json() or {}
+    email = (data.get('email') or '').strip().lower()
+    if not email:
+        return jsonify({'error': 'Email is required'}), 400
+
+    generic_message = (
+        'If an account exists for that email, password reset instructions have been sent.'
+    )
+    response_body = {'message': generic_message}
+    reset_url = None
+
+    try:
+        user = User.query.filter_by(email=email).first()
+        if user and user.is_active is not False:
+            PasswordResetToken.query.filter_by(user_id=user.id, used=False).update(
+                {'used': True},
+                synchronize_session=False,
+            )
+
+            token = secrets.token_urlsafe(32)
+            reset_row = PasswordResetToken(
+                user_id=user.id,
+                token=token,
+                expires_at=datetime.utcnow() + timedelta(hours=1),
+                used=False,
+            )
+            db.session.add(reset_row)
+            db.session.commit()
+
+            frontend_url = (
+                current_app.config.get('FRONTEND_URL')
+                or os.environ.get('FRONTEND_URL')
+                or 'http://localhost:5173'
+            ).rstrip('/')
+            reset_url = f'{frontend_url}/reset-password?token={token}'
+
+            mail_configured = bool(current_app.config.get('MAIL_USERNAME'))
+            if reset_url and (current_app.debug or not mail_configured):
+                response_body['reset_url'] = reset_url
+                print(f'[Password reset] {email}: {reset_url}')
+            else:
+                print(f'[Password reset] Reset requested for {email}')
+    except Exception as e:
+        db.session.rollback()
+        print(f'[Password reset] Error for {email}: {e}')
+        return jsonify({'error': 'Could not process password reset request'}), 500
+
+    return jsonify(response_body), 200
+
+
+@users_bp.route('/reset-password', methods=['POST'])
+def reset_password():
+    """Set a new password using a valid, unused reset token."""
+    data = request.get_json() or {}
+    token = (data.get('token') or '').strip()
+    password = data.get('password') or ''
+
+    if not token or not password:
+        return jsonify({'error': 'Reset token and new password are required'}), 400
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+    reset_row = PasswordResetToken.query.filter_by(token=token, used=False).first()
+    if not reset_row or reset_row.expires_at < datetime.utcnow():
+        return jsonify({'error': 'This reset link is invalid or has expired'}), 400
+
+    user = db.session.get(User, reset_row.user_id)
+    if not user or user.is_active is False:
+        return jsonify({'error': 'This reset link is invalid or has expired'}), 400
+
+    user.password_hash = generate_password_hash(password)
+    reset_row.used = True
+    PasswordResetToken.query.filter_by(user_id=user.id, used=False).update(
+        {'used': True},
+        synchronize_session=False,
+    )
+
+    try:
+        db.session.commit()
+        return jsonify({'message': 'Password updated successfully. You can sign in now.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to reset password', 'details': str(e)}), 500
 
 
 @users_bp.route('/me', methods=['GET'])
