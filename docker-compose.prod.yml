@@ -1,0 +1,17 @@
+# Production overlay — use with the base compose file on your Hostinger VPS.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Binds app ports to localhost so only host Nginx is public.
+# Set BIND_ADDRESS, FRONTEND_PORT, and secrets in .env (never commit .env).
+
+services:
+  backend:
+    environment:
+      SEED_ON_START: ${SEED_ON_START:-false}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-5000}:5000"
+
+  frontend:
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:80"

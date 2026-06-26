@@ -1,12 +1,33 @@
-# ShoeLocker — Docker Deployment Guide
+# ShoeLocker — Production Deployment (danzykicks.com)
 
-This guide explains how to deploy ShoeLocker on a VPS using Docker and Docker Compose. The stack runs three services:
+Deploy the full stack (PostgreSQL, Flask API, React storefront) on a **Hostinger VPS** with **Cloudflare** in front of **danzykicks.com**.
 
-| Service  | Technology        | Default port | Description              |
-|----------|-------------------|--------------|--------------------------|
-| `db`     | PostgreSQL 16     | internal     | Application database     |
-| `backend`| Flask + Gunicorn  | 5000         | REST API                 |
-| `frontend` | React + Nginx   | 80           | Storefront & admin UI    |
+| Service  | URL                         | Docker port (localhost) |
+|----------|-----------------------------|-------------------------|
+| Frontend | `https://danzykicks.com`    | `127.0.0.1:8080`        |
+| API      | `https://api.danzykicks.com`| `127.0.0.1:5000`        |
+| Database | internal only               | not published           |
+
+---
+
+## Architecture
+
+```
+Browser
+   │
+   ▼
+Cloudflare (DNS, CDN, DDoS, SSL edge)
+   │
+   ▼ HTTPS
+Host Nginx on VPS (:443)
+   ├── danzykicks.com / www  → 127.0.0.1:8080  (frontend container)
+   └── api.danzykicks.com    → 127.0.0.1:5000  (backend container)
+                                    │
+                                    ▼
+                              PostgreSQL (internal Docker network)
+```
+
+**Secrets never go in Git.** Use `.env` on the VPS only (copy from `.env.example`).
 
 ---
 
@@ -14,307 +35,260 @@ This guide explains how to deploy ShoeLocker on a VPS using Docker and Docker Co
 
 ```
 shoelocker/
-├── docker-compose.yml          # Orchestrates all services
-├── DEPLOYMENT.md               # This file
-├── .env                        # Secrets (create on VPS, never commit)
-│
-├── BACKEND/
-│   ├── Dockerfile              # Backend image definition
-│   ├── docker-entrypoint.sh    # Startup: wait for DB → migrate → serve
-│   ├── requirements.txt        # Python dependencies
-│   ├── .dockerignore           # Files excluded from backend image
-│   └── server/                 # Flask application
-│
-└── foot-locker/
-    ├── Dockerfile              # Frontend image (build + Nginx)
-    ├── nginx.conf              # Nginx config for the React SPA
-    ├── .dockerignore           # Files excluded from frontend image
-    └── src/                    # React application
+├── docker-compose.yml           # Base stack
+├── docker-compose.prod.yml      # Production: bind to localhost, disable auto-seed
+├── .env.example                 # Safe template (no real secrets)
+├── .env                         # Your secrets — create on VPS, gitignored
+├── deploy/
+│   └── nginx/danzykicks.com.conf
+├── BACKEND/Dockerfile
+├── foot-locker/Dockerfile
+└── DEPLOYMENT.md
 ```
 
 ---
 
-## Prerequisites
+## 1. VPS prerequisites (Hostinger)
 
-On your VPS, install:
-
-- [Docker](https://docs.docker.com/engine/install/)
-- [Docker Compose](https://docs.docker.com/compose/install/) (v2+)
-
-Clone the repository:
+SSH into your VPS and install Docker:
 
 ```bash
-git clone <your-repo-url> shoelocker
-cd shoelocker
+# Ubuntu 22.04/24.04
+sudo apt update && sudo apt install -y ca-certificates curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+# Log out and back in so docker group applies
+```
+
+Install Nginx:
+
+```bash
+sudo apt install -y nginx
+```
+
+Open firewall ports:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
 ```
 
 ---
 
-## Environment variables
+## 2. Cloudflare DNS (danzykicks.com)
 
-Create a `.env` file in the project root. This file is **gitignored** and must never be committed.
+In the [Cloudflare dashboard](https://dash.cloudflare.com) for **danzykicks.com**:
 
-### Required
+### Add the site
 
-```env
-POSTGRES_PASSWORD=change-me-strong-password
-SECRET_KEY=change-me-secret-key
-JWT_SECRET_KEY=change-me-jwt-secret-key
+1. Add domain → Cloudflare scans existing DNS from True Host.
+2. Update nameservers at True Host to the Cloudflare nameservers shown.
+3. Wait for activation (usually minutes to a few hours).
+
+### DNS records
+
+| Type | Name | Content        | Proxy status |
+|------|------|----------------|--------------|
+| A    | `@`  | `<VPS_IP>`     | Proxied (orange cloud) |
+| A    | `www`| `<VPS_IP>`     | Proxied |
+| A    | `api`| `<VPS_IP>`     | Proxied |
+
+Replace `<VPS_IP>` with your Hostinger VPS public IPv4 address.
+
+### SSL/TLS settings
+
+1. **SSL/TLS → Overview** → set encryption mode to **Full (strict)**.
+2. **SSL/TLS → Origin Server** → **Create Certificate**:
+   - Hostnames: `danzykicks.com`, `*.danzykicks.com`
+   - Validity: 15 years
+   - Save the certificate and private key on the VPS only:
+
+```bash
+sudo mkdir -p /etc/ssl/cloudflare
+sudo nano /etc/ssl/cloudflare/danzykicks.com.pem    # paste certificate
+sudo nano /etc/ssl/cloudflare/danzykicks.com.key    # paste private key
+sudo chmod 600 /etc/ssl/cloudflare/danzykicks.com.key
 ```
 
-Generate random secrets:
+3. **SSL/TLS → Edge Certificates** → enable **Always Use HTTPS**.
+
+### Recommended Cloudflare settings
+
+- **Speed → Optimization** → Auto Minify (JS, CSS, HTML) optional.
+- **Caching** → respect `Cache-Control` from origin for API (`api.danzykicks.com` should not be heavily cached).
+- Create a **Cache Rule** for `api.danzykicks.com/*` → Bypass cache (API responses must be fresh).
+
+---
+
+## 3. Clone and configure on the VPS
+
+```bash
+git clone <your-repo-url> ~/shoelocker
+cd ~/shoelocker
+cp .env.example .env
+nano .env
+```
+
+### Required values in `.env`
+
+Generate secrets:
 
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-### Production URLs
+Set these (replace `CHANGE_ME`):
 
 ```env
-# Public API URL — must be reachable from the user's browser
-VITE_API_BASE_URL=https://api.yourdomain.com
-
-# Origins allowed by Flask-CORS (comma-separated)
-CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+POSTGRES_PASSWORD=<generated>
+SECRET_KEY=<generated>
+JWT_SECRET_KEY=<generated>
 ```
 
-> **Important:** `VITE_API_BASE_URL` is baked into the frontend at **build time**. After changing it, rebuild the frontend:
->
-> ```bash
-> docker compose up -d --build frontend
-> ```
-
-### Optional
+Production URLs (already in `.env.example`):
 
 ```env
-# Database
-POSTGRES_USER=shoelocker
-POSTGRES_DB=shoelocker
-
-# Host ports
-FRONTEND_PORT=80
+VITE_API_BASE_URL=https://api.danzykicks.com
+CORS_ORIGINS=https://danzykicks.com,https://www.danzykicks.com
+FRONTEND_URL=https://danzykicks.com
+BIND_ADDRESS=127.0.0.1
+FRONTEND_PORT=8080
 BACKEND_PORT=5000
+SEED_ON_START=false
+```
 
-# Gunicorn
-GUNICORN_WORKERS=4
-GUNICORN_TIMEOUT=120
+> `VITE_API_BASE_URL` is baked into the frontend at **build time**. After changing it, rebuild:
+> `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build frontend`
 
-# Frontend
-VITE_USE_MOCK_API=false
+---
 
-# Email
-MAIL_SERVER=smtp.example.com
-MAIL_PORT=587
-MAIL_USE_TLS=true
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_DEFAULT_SENDER=noreply@shoelocker.ke
+## 4. Start Docker stack (production)
 
-# Stripe
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
+From the project root on your VPS:
 
-# M-Pesa
-MPESA_CONSUMER_KEY=
-MPESA_CONSUMER_SECRET=
-MPESA_SHORTCODE=
-MPESA_PASSKEY=
-MPESA_CALLBACK_URL=
-MPESA_ENVIRONMENT=sandbox
+```bash
+cd ~/shoelocker
+
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+```
+
+### First-time admin user
+
+With `SEED_ON_START=false` (recommended for production):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python seed_admin.py
+```
+
+**Change the default admin password immediately** after first login.
+
+For first deploy only, you can set `SEED_ON_START=true`, deploy once, then set it back to `false` and redeploy.
+
+---
+
+## 5. Host Nginx reverse proxy
+
+```bash
+sudo cp deploy/nginx/danzykicks.com.conf /etc/nginx/sites-available/danzykicks.com
+sudo ln -sf /etc/nginx/sites-available/danzykicks.com /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 ---
 
-## How each service works
+## 6. Verify deployment
 
-### Database (`db`)
+```bash
+# On VPS (containers healthy)
+curl -s http://127.0.0.1:5000/
+curl -I http://127.0.0.1:8080/
 
-- Runs PostgreSQL 16 Alpine.
-- Data is stored in the `postgres_data` Docker volume (survives container restarts).
-- Not exposed to the public internet — only reachable inside the `shoelocker` network.
-- A health check ensures the backend waits until Postgres is ready.
+# Public (after DNS + Cloudflare propagate)
+curl -s https://api.danzykicks.com/
+curl -I https://danzykicks.com/
+```
 
-### Backend (`backend`)
-
-**Dockerfile** (`BACKEND/Dockerfile`):
-
-1. Uses Python 3.12 slim.
-2. Installs dependencies from `requirements.txt` (includes Gunicorn and `psycopg2-binary`).
-3. Copies the Flask app from `server/`.
-4. Exposes port `5000`.
-
-**Startup** (`docker-entrypoint.sh`):
-
-1. Waits for PostgreSQL to accept connections (up to 60 seconds).
-2. Runs `flask db upgrade` to apply database migrations.
-3. Starts Gunicorn with 4 workers (configurable via `GUNICORN_WORKERS`).
-
-**Persistent storage:**
-
-- Product uploads are stored in the `uploads_data` volume at `/app/server/static/uploads`.
-
-### Frontend (`frontend`)
-
-**Dockerfile** (`foot-locker/Dockerfile`) — two stages:
-
-1. **Build stage** — Node 20 installs dependencies and runs `npm run build`, injecting `VITE_API_BASE_URL`.
-2. **Serve stage** — Nginx Alpine serves the built static files from `/usr/share/nginx/html`.
-
-**Nginx** (`foot-locker/nginx.conf`):
-
-- Serves the React SPA.
-- Routes unknown paths to `index.html` (required for React Router).
-- Enables gzip and caches static assets for 7 days.
+Open `https://danzykicks.com` in a browser and confirm the storefront loads and API calls go to `https://api.danzykicks.com`.
 
 ---
 
-## Deploy
+## Environment variables reference
 
-### First-time setup
+### Secrets (`.env` only — never commit)
 
-```bash
-# 1. Create .env with your secrets and URLs (see above)
+| Variable | Purpose |
+|----------|---------|
+| `POSTGRES_PASSWORD` | Database password |
+| `SECRET_KEY` | Flask session signing |
+| `JWT_SECRET_KEY` | JWT token signing |
+| `MAIL_PASSWORD` | SMTP password |
+| `STRIPE_SECRET_KEY` | Stripe API |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhooks |
+| `MPESA_CONSUMER_KEY` | Safaricom Daraja |
+| `MPESA_CONSUMER_SECRET` | Safaricom Daraja |
+| `MPESA_PASSKEY` | M-Pesa STK push |
+| `GEMINI_API_KEY` | Google Gemini AI |
 
-# 2. Build and start all services
-docker compose up -d --build
+### Public / operational config
 
-# 3. Check status
-docker compose ps
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `VITE_API_BASE_URL` | — | Public API URL for browser |
+| `CORS_ORIGINS` | localhost | Comma-separated frontend origins |
+| `FRONTEND_URL` | localhost | Password-reset email links |
+| `BIND_ADDRESS` | `0.0.0.0` | Use `127.0.0.1` in production |
+| `FRONTEND_PORT` | `80` | Use `8080` when host Nginx uses :80 |
+| `BACKEND_PORT` | `5000` | API port on host loopback |
+| `SEED_ON_START` | `true` | Set `false` in production |
+| `MPESA_CALLBACK_URL` | — | `https://api.danzykicks.com/payments/callback` |
 
-# 4. View logs
-docker compose logs -f
-```
-
-### Seed data (first run only)
-
-```bash
-# Create admin user
-docker compose exec backend python seed_admin.py
-
-# Optional: seed products
-docker compose exec backend python seed_products.py
-```
-
-### Verify
-
-```bash
-# API health
-curl http://localhost:5000/
-
-# Frontend
-curl -I http://localhost/
-```
+See `.env.example` for the full list.
 
 ---
 
 ## Common operations
 
 ```bash
-# Stop all services
-docker compose down
+COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 
-# Stop and remove volumes (⚠️ deletes database and uploads)
-docker compose down -v
+# Logs
+$COMPOSE logs -f backend
+$COMPOSE logs -f frontend
 
 # Rebuild after code changes
-docker compose up -d --build
+$COMPOSE up -d --build
 
-# Rebuild only the backend
-docker compose up -d --build backend
+# Rebuild frontend after URL change
+$COMPOSE up -d --build frontend
 
-# Rebuild only the frontend (e.g. after changing VITE_API_BASE_URL)
-docker compose up -d --build frontend
+# Run migrations
+$COMPOSE exec backend flask db upgrade
 
-# Run migrations manually
-docker compose exec backend flask db upgrade
+# Stop stack
+$COMPOSE down
 
-# Open a shell inside the backend container
-docker compose exec backend sh
-
-# Tail backend logs
-docker compose logs -f backend
+# Stop and wipe data (destructive)
+$COMPOSE down -v
 ```
 
 ---
 
-## Production VPS setup (HTTPS)
+## Security checklist
 
-Docker exposes ports `80` (frontend) and `5000` (backend). For production, put a reverse proxy in front for HTTPS.
-
-### Example with Caddy
-
-```
-yourdomain.com {
-    reverse_proxy localhost:80
-}
-
-api.yourdomain.com {
-    reverse_proxy localhost:5000
-}
-```
-
-Set in `.env`:
-
-```env
-VITE_API_BASE_URL=https://api.yourdomain.com
-CORS_ORIGINS=https://yourdomain.com
-```
-
-Then rebuild the frontend:
-
-```bash
-docker compose up -d --build frontend
-```
-
-### Example with Nginx on the host
-
-```nginx
-# /etc/nginx/sites-available/shoelocker
-
-server {
-    listen 443 ssl;
-    server_name yourdomain.com;
-
-    ssl_certificate     /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name api.yourdomain.com;
-
-    ssl_certificate     /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-Obtain certificates with [Certbot](https://certbot.eff.org/):
-
-```bash
-sudo certbot --nginx -d yourdomain.com -d api.yourdomain.com
-```
-
----
-
-## Security notes
-
-- **Never commit `.env`** — it is listed in `.gitignore` at the repo root and in both `BACKEND/` and `foot-locker/` gitignore files.
-- **Change default passwords** before going live.
-- **Use HTTPS** in production — set `VITE_API_BASE_URL` and `CORS_ORIGINS` to your `https://` domains.
-- **Postgres is internal** — only the backend container can reach it over the Docker network.
-- **Uploads persist** in the `uploads_data` volume — back this up alongside `postgres_data`.
+- [ ] `.env` exists only on the VPS, never committed
+- [ ] `BIND_ADDRESS=127.0.0.1` so Docker ports are not public
+- [ ] Cloudflare SSL mode is **Full (strict)**
+- [ ] Origin certificate stored at `/etc/ssl/cloudflare/` with `600` on the key
+- [ ] `SEED_ON_START=false` after initial setup
+- [ ] Admin password changed from default
+- [ ] `CORS_ORIGINS` lists only your real frontend domains
+- [ ] Back up `postgres_data` and `uploads_data` Docker volumes regularly
 
 ---
 
@@ -322,73 +296,40 @@ sudo certbot --nginx -d yourdomain.com -d api.yourdomain.com
 
 ### `Set POSTGRES_PASSWORD in .env`
 
-Create a `.env` file in the project root with at least `POSTGRES_PASSWORD`, `SECRET_KEY`, and `JWT_SECRET_KEY`.
+Create `.env` from `.env.example` and set `POSTGRES_PASSWORD`, `SECRET_KEY`, and `JWT_SECRET_KEY`.
 
-### Port already in use
+### Frontend API errors / CORS
 
-```bash
-# Find what is using the port
-fuser -v 5000/tcp
-fuser -v 80/tcp
+1. Confirm `VITE_API_BASE_URL=https://api.danzykicks.com`
+2. Rebuild frontend: `$COMPOSE up -d --build frontend`
+3. Confirm `CORS_ORIGINS` includes `https://danzykicks.com`
 
-# Stop the process or change ports in .env
-BACKEND_PORT=5001
-FRONTEND_PORT=8080
-```
+### Cloudflare 522 / connection timed out
 
-### Backend fails to start / migration errors
+- VPS firewall allows 80/443
+- Nginx is running: `sudo systemctl status nginx`
+- Docker containers healthy: `$COMPOSE ps`
 
-```bash
-docker compose logs backend
-docker compose exec backend flask db upgrade
-```
+### Cloudflare 525 / SSL handshake failed
 
-### Frontend shows API errors
+- Origin certificate installed correctly
+- Cloudflare SSL mode is **Full (strict)**, not Flexible
 
-1. Confirm `VITE_API_BASE_URL` points to the public API URL (not `http://db:5432` or an internal Docker hostname).
-2. Rebuild the frontend after changing it: `docker compose up -d --build frontend`.
-3. Confirm `CORS_ORIGINS` includes your frontend domain.
+### Port conflicts on VPS
 
-### Database connection refused
-
-The entrypoint waits up to 60 seconds for Postgres. If it still fails:
-
-```bash
-docker compose ps          # db should be "healthy"
-docker compose logs db
-```
-
-### Reset everything
-
-```bash
-docker compose down -v
-docker compose up -d --build
-docker compose exec backend python seed_admin.py
-```
+If port 80 is used by Nginx and Docker tries to bind 80, use production compose (`FRONTEND_PORT=8080`).
 
 ---
 
-## Architecture diagram
+## Local development (without production overlay)
 
+```bash
+cp .env.example .env
+# Edit for local URLs:
+#   VITE_API_BASE_URL=http://localhost:5000
+#   CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+
+docker compose up -d --build
 ```
-                    ┌─────────────────────────────────────┐
-                    │              VPS                     │
-                    │                                      │
-  Browser ──HTTPS──►  Reverse proxy (Caddy / Nginx)       │
-                    │         │              │             │
-                    │         ▼              ▼             │
-                    │   ┌──────────┐  ┌──────────┐        │
-                    │   │ frontend │  │ backend  │        │
-                    │   │  Nginx   │  │ Gunicorn │        │
-                    │   │  :80     │  │  :5000   │        │
-                    │   └──────────┘  └────┬─────┘        │
-                    │                        │               │
-                    │                   ┌────▼─────┐        │
-                    │                   │    db    │        │
-                    │                   │ Postgres │        │
-                    │                   │ (internal)│        │
-                    │                   └──────────┘        │
-                    │                                      │
-                    │   Volumes: postgres_data, uploads_data │
-                    └─────────────────────────────────────┘
-```
+
+For frontend dev with hot reload, run `npm run dev` in `foot-locker/` separately.

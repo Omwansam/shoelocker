@@ -27,10 +27,14 @@ PY
 echo "Running database migrations..."
 flask db upgrade
 
-echo "Seeding catalog and demo analytics data (if needed)..."
-python seed_products.py 2>/dev/null || true
-python seed_admin.py 2>/dev/null || true
-python seed_demo_data.py 2>/dev/null || true
+if [ "${SEED_ON_START:-true}" = "true" ]; then
+  echo "Seeding catalog and demo data (SEED_ON_START=true)..."
+  python seed_products.py 2>/dev/null || true
+  python seed_admin.py 2>/dev/null || true
+  python seed_demo_data.py 2>/dev/null || true
+else
+  echo "Skipping seed scripts (SEED_ON_START=false)."
+fi
 
 echo "Starting Gunicorn..."
 exec gunicorn \

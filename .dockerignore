@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Git and editor
+.git
+.gitignore
+**/.git
+**/.gitignore
+.vscode
+.idea
+*.md
+
+# Credentials (never bake into images)
+*.pem
+*.key
+*.crt
+credentials/
+secrets/
+deploy/ssl/

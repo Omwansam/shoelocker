@@ -12,7 +12,7 @@ const API_CONFIG_DEV = {
 
 // Production configuration  
 const API_CONFIG_PROD = {
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://api.shoelocker.com',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://api.danzykicks.com',
   timeout: 10000,
 };
 
